@@ -2993,34 +2993,334 @@ return api;
                     html = html.replace(/(href|src|action)=["']\/([^"']*)["']/g, `$1="${baseUrl.origin}/$2"`);
                     html = html.replace(/(href|src|action)=["'](?!https?:\/\/|javascript:|blob:|#)([^"']*)["']/g, `$1="${baseUrl.origin}/$2"`);
                     
-                    const proxyScript = `
-                        <script>
-                            window.fetch = function(url, options) {
-                                if (window.parent !== window && window.parent.libcurl) {
-                                    return window.parent.libcurl.fetch(url, options);
-                                }
-                                return fetch(url, options);
-                            };
-                            document.addEventListener('click', function(e) {
-                                const link = e.target.closest('a');
-                                if (link && link.href && !link.href.startsWith('javascript:') && !link.href.startsWith('blob:') && !link.href.startsWith('#')) {
-                                    e.preventDefault();
-                                    window.parent.postMessage({ type: 'navigate', url: link.href }, '*');
-                                }
-                            });
-                            document.addEventListener('submit', function(e) {
-                                const form = e.target;
-                                if (form.action && !form.action.startsWith('javascript:')) {
-                                    e.preventDefault();
-                                    const formData = new FormData(form);
-                                    const params = new URLSearchParams(formData);
-                                    const url = form.method === 'post' ? form.action : form.action + '?' + params.toString();
-                                    window.parent.postMessage({ type: 'navigate', url: url }, '*');
-                                }
-                            });
-                        <\/script>
-                    `;
-                    
+                    const proxyScript = `<script data-gust-injected="1">(function(){
+if(window.__P) return;
+window.__P = true;
+
+// Pull configuration from nexus.txt's exposed config
+const CONFIG = window.parent.__NEXUS_CONFIG__ || {};
+const BASE = CONFIG.baseUrl || CONFIG.activeWisp || window.location.href;
+const ORIGIN = new URL(BASE).origin;
+
+// Match nexus.txt settings names
+const BLOCK_ENABLED = CONFIG.blockAds !== false;
+const JS_PROXY = CONFIG.jsProxy !== false;
+const WEBRTC_BLOCK = CONFIG.blockWebRTC === true;
+const SPOOF_UA = CONFIG.spoofUA || navigator.userAgent;
+const SPELLCHECK = CONFIG.spellcheck === true;
+
+const SKIP = CONFIG.skipList || ["google-analytics.com","googletagmanager.com","doubleclick.net","google.com","googleapis.com","gstatic.com","facebook.com","fbcdn.net","twitter.com","twimg.com","amazon-adsystem.com"];
+
+const isBlocked = (url) => {
+  try {
+    const u = url.toLowerCase();
+    return BLOCK_ENABLED && SKIP.some(s => u.includes(s));
+  } catch(e) { return false; }
+};
+
+const rewriteUrl = (url) => {
+  if (!url || typeof url !== 'string') return url;
+  if (url.startsWith('data:') || url.startsWith('blob:') || url.startsWith('javascript:')) return url;
+  if (isBlocked(url)) return 'about:blank';
+  if (url.startsWith(BASE)) return url;
+  if (url.startsWith('//')) url = 'https:' + url;
+  if (!/^https?:\\/\\//i.test(url)) {
+    try {
+      const base = new URL(BASE);
+      url = new URL(url, base).href;
+      return BASE + url.replace(/^https?:\\/\\//, '');
+    } catch(e) { return url; }
+  }
+  return BASE + url.replace(/^https?:\\/\\//, '');
+};
+
+const rewriteCSS = (css) => {
+  if (!css || typeof css !== 'string') return css;
+  return css.replace(/url\\s*\\(\\s*(['"]?)([^)'"]+)\\1\\s*\\)/gi, (match, quote, url) => {
+    if (url.startsWith('data:')) return match;
+    return \`url(\${quote}\${rewriteUrl(url)}\${quote})\`;
+  });
+};
+
+// Patch XHR
+const X = XMLHttpRequest;
+const O = X.prototype.open;
+const S = X.prototype.send;
+X.prototype.open = function(method, url, async, user, password) {
+  this._url = url;
+  return O.call(this, method, rewriteUrl(url), async, user, password);
+};
+X.prototype.send = function(body) {
+  if (this._url && isBlocked(this._url)) {
+    Object.defineProperty(this, 'status', { value: 0, writable: false });
+    Object.defineProperty(this, 'statusText', { value: 'Blocked', writable: false });
+    this.dispatchEvent(new Event('error'));
+    return;
+  }
+  return S.call(this, body);
+};
+
+// Patch fetch
+const F = fetch;
+window.fetch = function(input, init) {
+  let url = typeof input === 'string' ? input : input.url;
+  if (isBlocked(url)) return Promise.reject(new Error('Blocked'));
+  if (typeof input === 'string') input = rewriteUrl(input);
+  else if (input && input.url) input = new Request(rewriteUrl(input.url), input);
+  return F.call(window, input, init);
+};
+
+// Patch WebSocket
+const W = WebSocket;
+window.WebSocket = function(url, protocols) {
+  if (isBlocked(url)) throw new Error('Blocked');
+  const wsUrl = url.replace(/^wss?:\\/\\//, (m) => BASE + (m.includes('s') ? 'wss://' : 'ws://'));
+  return new W(wsUrl, protocols);
+};
+
+// Patch Worker
+const Wr = Worker;
+window.Worker = function(scriptURL, options) {
+  if (isBlocked(scriptURL)) throw new Error('Blocked');
+  return new Wr(rewriteUrl(scriptURL), options);
+};
+
+// Patch importScripts
+if (typeof importScripts === 'function') {
+  const I = importScripts;
+  self.importScripts = function(...urls) {
+    return I.apply(self, urls.map(u => isBlocked(u) ? 'data:text/javascript,' : rewriteUrl(u)));
+  };
+}
+
+// Patch createElement for scripts
+const C = document.createElement;
+document.createElement = function(tag) {
+  const el = C.call(document, tag);
+  if (tag.toLowerCase() === 'script') {
+    const orig = el.setAttribute;
+    el.setAttribute = function(name, value) {
+      if (name === 'src') {
+        if (isBlocked(value)) return;
+        value = rewriteUrl(value);
+      }
+      return orig.call(this, name, value);
+    };
+    Object.defineProperty(el, 'src', {
+      set: function(v) {
+        if (isBlocked(v)) return;
+        this.setAttribute('src', rewriteUrl(v));
+      },
+      get: function() { return this.getAttribute('src'); }
+    });
+  }
+  return el;
+};
+
+// Patch insertAdjacentHTML
+const I = HTMLElement.prototype.insertAdjacentHTML;
+HTMLElement.prototype.insertAdjacentHTML = function(pos, text) {
+  const t = text.replace(/<script[^>]*src=["']([^"']+)["'][^>]*>/gi, (m, url) => {
+    if (isBlocked(url)) return '<script data-blocked="1">';
+    return m.replace(url, rewriteUrl(url));
+  });
+  return I.call(this, pos, t);
+};
+
+// Patch setAttribute for various elements
+const S = Element.prototype.setAttribute;
+Element.prototype.setAttribute = function(name, value) {
+  if ((this.tagName === 'LINK' && name === 'href') ||
+      (this.tagName === 'IMG' && name === 'src') ||
+      (this.tagName === 'IFRAME' && name === 'src') ||
+      (this.tagName === 'VIDEO' && name === 'src') ||
+      (this.tagName === 'AUDIO' && name === 'src') ||
+      (this.tagName === 'SOURCE' && name === 'src')) {
+    if (isBlocked(value)) return;
+    value = rewriteUrl(value);
+  }
+  return S.call(this, name, value);
+};
+
+// Patch CSS
+const CSS = CSSStyleDeclaration.prototype.setProperty;
+CSSStyleDeclaration.prototype.setProperty = function(prop, value, priority) {
+  if (value && (prop === 'background' || prop === 'background-image' || prop.includes('image'))) {
+    value = rewriteCSS(value);
+  }
+  return CSS.call(this, prop, value, priority);
+};
+
+// Patch History
+const pushState = history.pushState;
+const replaceState = history.replaceState;
+history.pushState = function(data, title, url) {
+  if (url) {
+    const rewritten = rewriteUrl(url);
+    return pushState.call(this, data, title, rewritten);
+  }
+  return pushState.call(this, data, title);
+};
+history.replaceState = function(data, title, url) {
+  if (url) {
+    const rewritten = rewriteUrl(url);
+    return replaceState.call(this, data, title, rewritten);
+  }
+  return replaceState.call(this, data, title);
+};
+
+// Spoof Location
+try {
+  const fakeLoc = new URL(BASE);
+  Object.defineProperty(window, 'location', {
+    get: function() {
+      return {
+        href: fakeLoc.href,
+        protocol: fakeLoc.protocol,
+        host: fakeLoc.host,
+        hostname: fakeLoc.hostname,
+        port: fakeLoc.port,
+        pathname: fakeLoc.pathname,
+        search: fakeLoc.search,
+        hash: fakeLoc.hash,
+        username: fakeLoc.username,
+        password: fakeLoc.password,
+        origin: fakeLoc.origin,
+        assign: function(url) { parent.postMessage({t:'n',u:url},'*'); },
+        replace: function(url) { parent.postMessage({t:'n',u:url},'*'); },
+        reload: function() { parent.postMessage({t:'reload'},'*'); },
+        toString: function() { return fakeLoc.href; }
+      };
+    },
+    set: function(url) { parent.postMessage({t:'n',u:url},'*'); },
+    configurable: true
+  });
+} catch(e) { console.error('[Proxy] Location patch failed:', e); }
+
+// Spoof Navigator
+if (SPOOF_UA) {
+  Object.defineProperty(navigator, 'userAgent', { value: SPOOF_UA, configurable: true });
+  Object.defineProperty(navigator, 'appVersion', { value: SPOOF_UA, configurable: true });
+}
+
+// Block WebRTC
+if (WEBRTC_BLOCK) {
+  const n = navigator;
+  if (n.getUserMedia) n.getUserMedia = undefined;
+  if (n.webkitGetUserMedia) n.webkitGetUserMedia = undefined;
+  if (n.mozGetUserMedia) n.mozGetUserMedia = undefined;
+  if (window.RTCPeerConnection) window.RTCPeerConnection = undefined;
+  if (window.webkitRTCPeerConnection) window.webkitRTCPeerConnection = undefined;
+  if (window.mozRTCPeerConnection) window.mozRTCPeerConnection = undefined;
+}
+
+// Console forwarding
+const methods = ['log','warn','error','info','debug'];
+methods.forEach(m => {
+  const o = console[m];
+  console[m] = function(...a) {
+    try { parent.postMessage({ t: 'c', m: m, a: a.map(x => String(x)) }, '*'); } catch(e){}
+    return o.apply(this, a);
+  };
+});
+
+// Error reporting
+window.onerror = function(msg, url, line, col, err) {
+  try { parent.postMessage({ t: 'c', m: 'error', a: [msg, url, line, col] }, '*'); } catch(e){}
+  return false;
+};
+
+// Form interception
+document.addEventListener('submit', function(e) {
+  const form = e.target;
+  if (!form || form.tagName !== 'FORM') return;
+  const action = form.getAttribute('action') || form.action;
+  if (action) {
+    form.setAttribute('data-gust-action', action);
+    form.action = 'javascript:void(0)';
+  }
+}, true);
+
+// Link interception
+document.addEventListener('click', function(e) {
+  const a = e.target.closest && e.target.closest('a');
+  if (!a) return;
+  const href = a.getAttribute('href');
+  if (href && !href.startsWith('#') && !href.startsWith('javascript:')) {
+    a.setAttribute('data-gust-href', href);
+    a.href = 'javascript:void(0)';
+  }
+}, true);
+
+// Dynamic script blocking
+const observer = new MutationObserver((muts) => {
+  muts.forEach(m => {
+    m.addedNodes.forEach(n => {
+      if (n.tagName === 'SCRIPT' && n.src) {
+        if (isBlocked(n.src)) {
+          n.remove();
+        } else {
+          const newSrc = rewriteUrl(n.src);
+          if (newSrc !== n.src) n.src = newSrc;
+        }
+      }
+      if (n.tagName === 'LINK' && n.href) {
+        if (isBlocked(n.href)) {
+          n.remove();
+        } else {
+          const newHref = rewriteUrl(n.href);
+          if (newHref !== n.href) n.href = newHref;
+        }
+      }
+    });
+  });
+});
+observer.observe(document.documentElement, { childList: true, subtree: true });
+
+// Spellcheck
+if (SPELLCHECK === false) {
+  document.body && document.body.setAttribute('spellcheck', 'false');
+  const spellObserver = new MutationObserver((muts) => {
+    muts.forEach(m => {
+      if (m.target && m.target.setAttribute) {
+        m.target.setAttribute('spellcheck', 'false');
+      }
+    });
+  });
+  spellObserver.observe(document.body, { childList: true, subtree: true });
+}
+
+parent.postMessage({ t: 'ready' }, '*');
+console.log('[Proxy] Ready');
+})();(function(){
+  document.addEventListener('click', function(e) {
+    var a = e.target && e.target.closest ? e.target.closest('a,area') : null;
+    if (!a) return;
+    var dest = a.getAttribute('data-gust-href');
+    if (!dest) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+    try { parent.postMessage({t:'n',u:dest},'*'); } catch(err) {}
+  }, true);
+  document.addEventListener('submit', function(e) {
+    var form = e.target;
+    if (!form || form.tagName !== 'FORM') return;
+    var dest = form.getAttribute('data-gust-action') || form.action;
+    if (!dest || /^(javascript:|blob:|data:)/i.test(dest)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+    var method = (form.getAttribute('method') || 'GET').toUpperCase();
+    var fd = new FormData(form);
+    if (method === 'POST') {
+      try { parent.postMessage({t:'n',u:dest,m:'POST',b:new URLSearchParams(fd).toString()},'*'); } catch(err) {}
+    } else {
+      var qs = new URLSearchParams(fd).toString();
+      try { parent.postMessage({t:'n',u:dest.split('?')[0]+(qs?'?'+qs:'')},'*'); } catch(err) {}
+    }
+  }, true);
+})();<\/script><base href="\${CONFIG.baseUrl || CONFIG.activeWisp || 'https://example.com/'}">`;
                     if (html.includes('</head>')) {
                         html = html.replace('</head>', proxyScript + '</head>');
                     } else {
@@ -3297,7 +3597,7 @@ function applyCustomTheme() {
     location.reload(); 
 }
 function openNetlii() {
-        loadUrl('https://cdn.jsdelivr.net/gh/bubbergamesites/graggle@main/Netlii.svg')
+        loadUrl('https://chimp.dpdns.org')
         };
 
         
