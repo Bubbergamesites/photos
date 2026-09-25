@@ -6,5 +6,5 @@ NEXUS.svg & NEXUS.html are both a single file version of [nexus-proxy](https://g
 BubberNet.svg & BubberNet.html are like nexus but look different </br>
 browser.svg is a simple kinda bad web proxy (bubberbrowser) (now with tabs!)<br/>
 browser1.svg is the same thing without the tabs<br/>
-a.js is a thingy you can use via <script src="https://cdn.jsdelivr.net/gh/bubbergamesites/photos-/a.js"></script> for a one-line web proxy<br/>
+all the js files you can use via script src= for one line games</br>
 GOOGOLPLEX is a new game site im working on its still in beta
