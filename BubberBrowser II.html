@@ -1,0 +1,1415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BubberBrowser II</title>
+<link rel="icon" href="https://google.com/favicon.ico" type="image/png">
+<!-- Playful Google Font for the Bubber Look -->
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root { 
+    --bg: #121315; 
+    --panel: #1e1f22; 
+    --line: #2b2d31; 
+    --text: #f2f3f5; 
+    --muted: #949ba4; 
+    --accent: #f59e0b; /* Warm Clay Yellow */
+    --err: #f87171; 
+    --bubber-blue: #3b82f6;
+    --bubber-red: #ef4444;
+    --bubber-yellow: #f59e0b;
+    --bubber-green: #10b981;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; background: var(--bg); color: var(--text);
+    font-family: 'Fredoka', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; overflow: hidden;
+    display: flex; flex-direction: column; }
+
+  /* New Browser Header & Tabs System */
+  #browser-header {
+    background: var(--panel);
+    border-bottom: 2px solid var(--line);
+    display: flex;
+    flex-direction: column;
+    z-index: 10;
+    user-select: none;
+  }
+  #tab-strip {
+    display: flex;
+    align-items: center;
+    padding: 6px 12px 0 12px;
+    background: #18191b;
+    gap: 6px;
+  }
+  #tabs-container {
+    display: flex;
+    gap: 4px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  #tabs-container::-webkit-scrollbar { display: none; }
+  
+  .tab-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--panel);
+    padding: 6px 14px;
+    border-radius: 12px 12px 0 0;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--muted);
+    cursor: pointer;
+    border: 1px solid var(--line);
+    border-bottom: none;
+    max-width: 160px;
+    min-width: 100px;
+    white-space: nowrap;
+    position: relative;
+    transition: background 0.15s, color 0.15s;
+  }
+  .tab-item.active {
+    background: var(--bg);
+    color: var(--text);
+    font-weight: 600;
+    border-color: var(--line);
+    box-shadow: 0 -2px 10px rgba(0,0,0,0.15);
+  }
+  .tab-item.active::after {
+    content: '';
+    position: absolute;
+    bottom: -1px;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: var(--accent);
+    border-radius: 3px 3px 0 0;
+  }
+  .tab-title-text {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .tab-close {
+    font-size: 14px;
+    color: var(--muted);
+    border-radius: 50%;
+    width: 16px;
+    height: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s, color 0.15s;
+  }
+  .tab-close:hover {
+    background: var(--err);
+    color: #fff;
+  }
+  #new-tab-btn {
+    background: var(--panel);
+    color: var(--text);
+    border: 1px solid var(--line);
+    border-radius: 50%;
+    width: 26px;
+    height: 26px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 14px;
+    margin-bottom: 4px;
+    transition: all 0.15s;
+  }
+  #new-tab-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    transform: scale(1.05);
+  }
+
+  /* Nav Controls Row */
+  #nav-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    background: var(--panel);
+  }
+  .nav-btn {
+    background: transparent;
+    border: none;
+    color: var(--text);
+    font-size: 16px;
+    cursor: pointer;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s;
+  }
+  .nav-btn:hover:not(:disabled) {
+    background: var(--line);
+  }
+  .nav-btn:disabled {
+    opacity: 0.3;
+    cursor: default;
+  }
+  .address-container {
+    flex: 1;
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+  #address-bar {
+    width: 100%;
+    height: 34px;
+    border-radius: 17px;
+    border: 1px solid var(--line);
+    background: var(--bg);
+    color: var(--text);
+    padding: 0 16px 0 36px;
+    font-family: inherit;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  #address-bar:focus {
+    border-color: var(--accent);
+  }
+  .address-icon {
+    position: absolute;
+    left: 12px;
+    color: var(--muted);
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+  }
+
+  /* Iframe & Overlays Space */
+  #stage { position: relative; flex: 1; overflow: hidden; background: #fff; }
+  iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #fff; display: none; }
+  iframe.on { display: block; }
+
+  /* Home Overlay */
+  #home { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; padding: 20px; background: var(--bg); z-index: 2; overflow-y: auto; }
+  #home.hidden { display: none; }
+
+  /* Logo styling */
+  .logo-container { margin-bottom: 24px; position: relative; select: none; cursor: default; }
+  .logo-bubber { font-size: 5.5rem; font-weight: 700; letter-spacing: -2px; display: inline-block; line-height: 1; }
+  .logo-mini { font-size: 1.2rem; font-weight: 600; background: var(--accent); color: #121315; 
+    padding: 2px 10px; border-radius: 12px; margin-left: 8px; vertical-align: super; text-transform: lowercase; }
+  
+  /* Tagline */
+  #home p.tagline { color: var(--muted); margin: 0; font-size: 1.1rem; font-weight: 400; max-width: 500px; line-height: 1.4; }
+
+  /* Bubber Form & Address bar */
+  #homeForm { display: flex; flex-direction: column; align-items: center; gap: 20px; width: 100%; max-width: 580px; margin-top: 28px; }
+  .search-wrapper { position: relative; width: 100%; display: flex; align-items: center; }
+  #urlInput { width: 100%; height: 54px; padding: 0 54px 0 24px; border-radius: 27px; border: 3px solid var(--line); 
+    background: var(--panel); color: var(--text); font-size: 17px; font-family: inherit; outline: none; transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1); }
+  #urlInput:focus { border-color: var(--accent); box-shadow: 0 0 15px rgba(245, 158, 11, 0.15); background: #232428; }
+  
+  /* Derpy Duck Eye / Search icon on input */
+  .search-icon { position: absolute; right: 20px; color: var(--muted); pointer-events: none; transition: transform 0.2s; }
+  #urlInput:focus ~ .search-icon { color: var(--accent); transform: scale(1.1) rotate(5deg); }
+
+  /* Bouncy Bubber Action Buttons */
+  .button-group { display: flex; gap: 12px; justify-content: center; width: 100%; }
+  .bubber-btn { height: 44px; padding: 0 24px; border: 2px solid transparent; border-radius: 22px; 
+    font-family: inherit; font-weight: 600; font-size: 15px; cursor: pointer; transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+  
+  .btn-primary { background: var(--panel); color: var(--text); border-color: var(--line); }
+  .btn-primary:hover:not(:disabled) { border-color: var(--accent); transform: translateY(-2px); }
+  .btn-accent { background: var(--accent); color: #121315; }
+  .btn-accent:hover:not(:disabled) { background: #fbbf24; transform: translateY(-2px); }
+  .bubber-btn:active { transform: translateY(1px) scale(0.97) !important; }
+  .bubber-btn:disabled { opacity: .5; cursor: default; transform: none !important; }
+
+  #statusMsg { margin-top: 18px; font-size: 14px; color: var(--muted); min-height: 20px; word-break: break-all; max-width: 560px; }
+  #statusMsg.ok { color: var(--accent); } #statusMsg.err { color: var(--err); }
+  
+  /* Refined Keyboard Shortcuts Panel */
+  #hint { margin-top: 32px; display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; max-width: 700px; padding: 12px; border-radius: 16px; background: rgba(30, 31, 34, 0.5); border: 1px solid var(--line); }
+  .shortcut-pill { font-size: 11px; color: var(--muted); background: var(--line); padding: 4px 8px; border-radius: 8px; display: flex; align-items: center; gap: 4px; }
+  .shortcut-pill kbd { background: #121315; padding: 1px 4px; border-radius: 4px; font-weight: 600; font-family: monospace; border: 1px solid #3f4248; color: var(--text); }
+
+  /* Tab Loading Spinner */
+  .tab-loading-spinner {
+    width: 12px;
+    height: 12px;
+    border: 2px solid var(--accent);
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: tab-spin 0.6s linear infinite;
+  }
+  @keyframes tab-spin { to { transform: rotate(360deg); } }
+
+  /* Bubble Background Animation */
+  .bubble-bg { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 1; }
+  .bubble { position: absolute; border-radius: 50%; background: rgba(245, 158, 11, 0.04); bottom: -100px; animation: floatUp 12s infinite linear; }
+  @keyframes floatUp {
+    0% { transform: translateY(0) rotate(0deg); opacity: 0; }
+    10% { opacity: 1; }
+    90% { opacity: 1; }
+    100% { transform: translateY(-110vh) rotate(360deg); opacity: 0; }
+  }
+
+  /* thin loading line + transient toast while a page is showing */
+  #progress { position: fixed; top: 0; left: 0; right: 0; height: 3px; z-index: 15; pointer-events: none; }
+  #progress.on { background: linear-gradient(90deg, transparent, var(--accent), transparent); background-size: 50% 100%; background-repeat: no-repeat; animation: slide 1.2s linear infinite; }
+  @keyframes slide { from{background-position:-50% 0} to{background-position:150% 0} }
+  
+  #toast { position: fixed; left: 16px; bottom: 16px; max-width: calc(100% - 32px); padding: 8px 16px; border-radius: 12px; background: rgba(30, 31, 34, 0.95);
+    border: 2px solid var(--line); color: var(--text); font-size: 13px; z-index: 15; pointer-events: none; opacity: 0; transition: opacity .25s, transform .25s;
+    transform: translateY(10px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-family: inherit; }
+  #toast.show { opacity: 1; transform: translateY(0); } #toast.err { color: var(--err); border-color: var(--err); } #toast.ok { color: var(--accent); border-color: var(--accent); }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/libcurl.js@latest/libcurl_full.js"></script>
+</head>
+<body>
+<div id="progress"></div>
+<div id="toast"></div>
+
+<!-- Unified Chrome Top Header -->
+<div id="browser-header">
+  <div id="tab-strip">
+    <!-- Brand logo in header -->
+    <div onclick="goHome()" style="cursor:pointer; display: flex; align-items: center; margin-right: 12px; font-weight: 700; font-size: 1.1rem; letter-spacing: -1px; select: none;">
+      <span style="color: var(--bubber-blue)">B</span><span style="color: var(--bubber-red)">u</span><span style="color: var(--bubber-yellow)">b</span><span style="color: var(--bubber-blue)">b</span><span style="color: var(--bubber-green)">e</span><span style="color: var(--bubber-red)">r</span>
+    </div>
+    <div id="tabs-container"></div>
+    <button id="new-tab-btn" onclick="createNewTab()" title="New Tab">+</button>
+  </div>
+  <div id="nav-bar">
+    <button class="nav-btn" onclick="goBack()" id="back-btn" title="Back" disabled>     
+    <svg style="width: 16px; height: 16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg></button>
+    <button class="nav-btn" onclick="goForward()" id="forward-btn" title="Forward" disabled>
+    <svg style="width: 16px; height: 16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg></button>
+    <button class="nav-btn" onclick="reload()" id="reload-btn" title="Reload">
+        <svg style="width: 16px; height: 16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" /></svg></button>
+    <button class="nav-btn" onclick="goHome()" id="home-btn" title="Home Overlay">
+        <svg style="width: 16px; height: 16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" /></svg></button>
+    <div class="address-container">
+      <div class="address-icon">
+        <svg style="width: 16px; height: 16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 008 11a4 4 0 118 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0015.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 008 4.07M3 15.364c.64-1.319 1-2.8 1-4.364 0-1.457.39-2.823 1.07-4"></path></svg>
+      </div>
+      <input type="text" id="address-bar" placeholder="Enter URL or search queries..." autocomplete="off" spellcheck="false">
+    </div>
+  </div>
+</div>
+
+<div id="stage">
+  <!-- Dynamic Iframes get generated here inside the tabs structure -->
+
+  <!-- Shared overlay Home Screen -->
+  <div id="home">
+    <div class="bubble-bg" id="bubbleBg"></div>
+
+    <div class="logo-container z-10">
+      <div class="logo-bubber">
+        <span style="color: var(--bubber-blue)">B</span><span style="color: var(--bubber-red)">u</span><span style="color: var(--bubber-yellow)">b</span><span style="color: var(--bubber-blue)">b</span><span style="color: var(--bubber-green)">e</span><span style="color: var(--bubber-red)">r</span>
+      </div>
+      <span class="logo-mini">browser</span>
+    </div>
+
+    <p class="tagline z-10">Hey you type like Mr.Chimp does! <br><span style="font-size: 13px; opacity: 0.7;">The simplest, highly persistent proxy web browser.</span></p>
+    
+    <form id="homeForm" autocomplete="off" class="z-10">
+      <div class="search-wrapper">
+        <input id="urlInput" type="text" placeholder="Search the web or enter address..." spellcheck="false" autocapitalize="off">
+        <div class="search-icon">
+          <svg class="w-6 h-6" style="width: 24px; height: 24px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+        </div>
+      </div>
+      
+      <div class="button-group">
+        <button id="goBtn" class="bubber-btn btn-accent" type="submit" disabled>WASM Booting...</button>
+        <button id="chimpyBtn" class="bubber-btn btn-primary" type="button" onclick="feelingChimppy()">I'm Feeling Chimppy</button>
+        <button id="soundBtn" class="bubber-btn btn-primary" type="button" onclick="famousSound()">Make your famous sound</button>
+      </div>
+    </form>
+    
+    <div id="statusMsg" class="z-10">Initializing WebAssembly sandbox environment...</div>
+    
+    <div id="hint" class="z-10">
+      <div class="shortcut-pill"><kbd>Alt</kbd> + <kbd>←</kbd> Back</div>
+      <div class="shortcut-pill"><kbd>Alt</kbd> + <kbd>→</kbd> Forward</div>
+      <div class="shortcut-pill"><kbd>Alt</kbd> + <kbd>R</kbd> Reload</div>
+      <div class="shortcut-pill"><kbd>Ctrl</kbd>+<kbd>Alt</kbd> + <kbd>L</kbd> Address Input</div>
+      <div class="shortcut-pill"><kbd>Esc</kbd> Close Overlay</div>
+      <div class="shortcut-pill"><kbd>Alt</kbd> + <kbd>Shift</kbd> + <kbd>Del</kbd> Flush Sandbox</div>
+    </div>
+  </div>
+</div>
+
+<script>
+const GATEWAY = 'wss://wisp.mercurywork.shop';
+const LIBCURL_BASE = 'https://cdn.jsdelivr.net/npm/libcurl.js@latest/';
+const MAX_META_REFRESH = 99;
+const $ = id => document.getElementById(id);
+const home = $('home'), urlInput = $('urlInput'), goBtn = $('goBtn');
+
+let ready = false, pending = null;
+let toastTimer = null;
+
+/* Multi-tab System State */
+let tabs = [];
+let activeTabId = null;
+
+class Tab {
+  constructor(id) {
+    this.id = id;
+    this.title = 'New Tab';
+    this.url = '';
+    this.history = [];
+    this.idx = -1;
+    this.token = 0;
+    this.blobUrl = null;
+    this.loading = false;
+    
+    // Create tab-specific sandboxed iframe
+    this.iframe = document.createElement('iframe');
+    this.iframe.sandbox = "allow-scripts allow-forms allow-popups allow-downloads allow-modals allow-pointer-lock allow-presentation allow-orientation-lock";
+    this.iframe.setAttribute('allow', "fullscreen; autoplay; clipboard-write; encrypted-media; picture-in-picture; gamepad; web-share");
+    $('stage').appendChild(this.iframe);
+  }
+}
+
+function getActiveTab() {
+  return tabs.find(t => t.id === activeTabId);
+}
+
+function createNewTab(url = '') {
+  const id = 'tab-' + Math.random().toString(36).substr(2, 9);
+  const tab = new Tab(id);
+  tabs.push(tab);
+  switchTab(id);
+  if (url) {
+    navigate(url);
+  } else {
+    showHome(true);
+  }
+}
+
+function switchTab(id) {
+  activeTabId = id;
+  const activeTab = getActiveTab();
+  if (!activeTab) return;
+
+  // Toggle active visibility of iframe
+  tabs.forEach(t => t.iframe.classList.toggle('on', t.id === activeTabId && t.url !== ''));
+  
+  // Sync UI inputs with the active tab
+  $('address-bar').value = activeTab.url;
+  urlInput.value = activeTab.url;
+  
+  // Toggle Home Overlay based on tab URL state
+  if (activeTab.url === '') {
+    showHome(true);
+  } else {
+    showHome(false);
+  }
+
+  updateNavButtons();
+  updateProgressLine();
+  renderTabs();
+}
+
+function closeTab(id, event) {
+  if (event) event.stopPropagation();
+  const index = tabs.findIndex(t => t.id === id);
+  if (index === -1) return;
+
+  // Cleanup tab memory and elements
+  const tab = tabs[index];
+  if (tab.blobUrl) URL.revokeObjectURL(tab.blobUrl);
+  tab.iframe.remove();
+  
+  tabs.splice(index, 1);
+
+  // Auto-generate a fresh tab if all were closed
+  if (tabs.length === 0) {
+    createNewTab();
+    return;
+  }
+
+  // If closed tab was active, switch active focus
+  if (activeTabId === id) {
+    const nextTab = tabs[index] || tabs[index - 1];
+    switchTab(nextTab.id);
+  } else {
+    renderTabs();
+  }
+}
+
+function renderTabs() {
+  const container = $('tabs-container');
+  container.innerHTML = '';
+  tabs.forEach(tab => {
+    const item = document.createElement('div');
+    item.className = `tab-item ${tab.id === activeTabId ? 'active' : ''}`;
+    item.onclick = () => switchTab(tab.id);
+
+    const titleEl = document.createElement('span');
+    titleEl.className = 'tab-title-text';
+    titleEl.textContent = tab.title;
+    item.appendChild(titleEl);
+
+    if (tab.loading) {
+      const spinner = document.createElement('span');
+      spinner.className = 'tab-loading-spinner';
+      item.appendChild(spinner);
+    } else {
+      const closeBtn = document.createElement('span');
+      closeBtn.className = 'tab-close';
+      closeBtn.innerHTML = '&times;';
+      closeBtn.onclick = (e) => closeTab(tab.id, e);
+      item.appendChild(closeBtn);
+    }
+
+    container.appendChild(item);
+  });
+}
+
+function updateProgressLine() {
+  const activeTab = getActiveTab();
+  $('progress').classList.toggle('on', activeTab ? activeTab.loading : false);
+}
+
+// Background dynamic Bubbles logic
+function makeBubbles() {
+  const bg = $('bubbleBg');
+  if(!bg) return;
+  for (let i = 0; i < 15; i++) {
+    const bubble = document.createElement('div');
+    bubble.className = 'bubble';
+    const size = Math.random() * 40 + 10;
+    bubble.style.width = `${size}px`;
+    bubble.style.height = `${size}px`;
+    bubble.style.left = `${Math.random() * 100}%`;
+    bubble.style.animationDelay = `${Math.random() * 8}s`;
+    bubble.style.animationDuration = `${Math.random() * 12 + 6}s`;
+    bg.appendChild(bubble);
+  }
+}
+makeBubbles();
+
+/* ================= UI Helpers ================= */
+function setStatus(msg, kind = '', targetTab = getActiveTab()) {
+  const isCurrent = targetTab === getActiveTab();
+  if (isCurrent) {
+    const s = $('statusMsg'); s.textContent = msg || ''; s.className = kind;
+    const t = $('toast');
+    clearTimeout(toastTimer);
+    if (msg && home.classList.contains('hidden')) {
+      t.textContent = msg; t.className = 'show ' + kind;
+      if (!targetTab.loading) toastTimer = setTimeout(() => t.classList.remove('show'), 3500);
+    } else t.className = '';
+  }
+}
+
+function showHome(on) {
+  const tab = getActiveTab();
+  home.classList.toggle('hidden', !on);
+  if (tab) {
+    tab.iframe.classList.toggle('on', !on && tab.url !== '');
+    if (on) {
+      urlInput.value = tab.idx >= 0 ? tab.history[tab.idx].url : '';
+      urlInput.focus();
+      urlInput.select();
+    } else {
+      $('toast').className = '';
+    }
+  }
+}
+
+function setLoading(tab, on) {
+  tab.loading = on;
+  updateProgressLine();
+  renderTabs();
+}
+
+/* ================= Helpers ================= */
+function normalizeInput(raw) {
+  const input = raw.trim();
+  if (!input) return null;
+  if (/^(about|data|blob|javascript):/i.test(input)) return null;
+  if (/^https?:\/\//i.test(input)) return input;
+  if (/^\/\//.test(input)) return 'https:' + input;
+  const noSpace = !/\s/.test(input);
+  if (noSpace && /^(localhost|\d{1,3}(\.\d{1,3}){3}|[a-z0-9-]+(\.[a-z0-9-]+)+)(:\d+)?([/?#].*)?$/i.test(input)) {
+    const scheme = /^(localhost|\d{1,3}(\.\d{1,3}){3})/i.test(input) ? 'http://' : 'https://';
+    return scheme + input;
+  }
+  return 'https://search.brave.com/search?q=' + encodeURIComponent(input);
+}
+function resolveUrl(href, base) { try { return new URL(href, base).href; } catch { return null; } }
+function decodeBody(buf, contentType) {
+  let charset = (/charset=([^;\s]+)/i.exec(contentType || '') || [])[1];
+  if (!charset) {
+    const head = new TextDecoder('latin1').decode(buf.slice(0, 2048));
+    charset = (/<meta[^>]+charset=["']?\s*([\w-]+)/i.exec(head) || [])[1];
+  }
+  try { return new TextDecoder(charset || 'utf-8').decode(buf); }
+  catch { return new TextDecoder('utf-8').decode(buf); }
+}
+function decodeEntities(s) { const t = document.createElement('textarea'); t.innerHTML = s; return t.value; }
+function filenameFrom(disp, url) {
+  const m = /filename\*?=(?:UTF-8'')?["']?([^"';]+)/i.exec(disp || '');
+  if (m) { try { return decodeURIComponent(m[1]); } catch { return m[1]; } }
+  try { return decodeURIComponent(new URL(url).pathname.split('/').filter(Boolean).pop() || 'download'); } catch { return 'download'; }
+}
+function saveBlob(blob, name) {
+  const u = URL.createObjectURL(blob), a = document.createElement('a');
+  a.href = u; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(u), 10000);
+}
+const safeJson = o => JSON.stringify(o).replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
+const hasHeader = (h, n) => Object.keys(h).some(k => k.toLowerCase() === n);
+
+/* ================= Persistent Storage (cookies + per-site localStorage) ================= */
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+  clearAll() { try { Object.keys(localStorage).filter(k => k.startsWith('mini:')).forEach(k => localStorage.removeItem(k)); } catch {} }
+};
+let jar = [];
+try { jar = JSON.parse(store.get('mini:jar') || '[]'); } catch {}
+const saveJar = () => store.set('mini:jar', JSON.stringify(jar));
+const hostMatch = (host, c) => c.hostOnly ? host === c.domain : (host === c.domain || host.endsWith('.' + c.domain));
+const pathMatch = (p, cp) => p === cp || (p.startsWith(cp) && (cp.endsWith('/') || p[cp.length] === '/'));
+
+function cookiesFor(url, forJs) {
+  let u; try { u = new URL(url); } catch { return []; }
+  const now = Date.now();
+  return jar.filter(c => (!c.exp || c.exp > now) && hostMatch(u.hostname, c) && pathMatch(u.pathname || '/', c.path)
+      && (!c.secure || u.protocol === 'https:') && !(forJs && c.httpOnly))
+    .sort((a, b) => b.path.length - a.path.length);
+}
+const cookieHeader = url => cookiesFor(url, false).map(c => c.name + '=' + c.value).join('; ');
+const pageCookies = url => cookiesFor(url, true).map(c => c.name + '=' + c.value).join('; ');
+
+function setCookieStr(str, url, fromJs) {
+  let u; try { u = new URL(url); } catch { return; }
+  const parts = String(str).split(';');
+  const eq = parts[0].indexOf('=');
+  const name = eq >= 0 ? parts[0].slice(0, eq).trim() : '';
+  const value = eq >= 0 ? parts[0].slice(eq + 1).trim() : parts[0].trim();
+  if (!name && !value) return;
+  const c = { name, value, domain: u.hostname, hostOnly: true, path: u.pathname.replace(/\/[^\/]*$/, '') || '/',
+              secure: false, httpOnly: false, exp: 0 };
+  let maxAge = null;
+  for (const attr of parts.slice(1)) {
+    const i = attr.indexOf('=');
+    const k = (i >= 0 ? attr.slice(0, i) : attr).trim().toLowerCase();
+    const v = i >= 0 ? attr.slice(i + 1).trim() : '';
+    if (k === 'domain') {
+      const d = v.replace(/^\./, '').toLowerCase();
+      if (u.hostname === d || u.hostname.endsWith('.' + d)) { c.domain = d; c.hostOnly = false; } else return;
+    } else if (k === 'path' && v.startsWith('/')) c.path = v;
+    else if (k === 'expires') { const t = Date.parse(v); if (!isNaN(t)) c.exp = t; }
+    else if (k === 'max-age') { const n = parseInt(v, 10); if (!isNaN(n)) maxAge = n; }
+    else if (k === 'secure') c.secure = true;
+    else if (k === 'httponly' && !fromJs) c.httpOnly = true;
+  }
+  if (maxAge !== null) c.exp = maxAge <= 0 ? 1 : Date.now() + maxAge * 1000;
+  jar = jar.filter(x => !(x.name === c.name && x.domain === c.domain && x.path === c.path));
+  if (!(c.exp && c.exp <= Date.now())) jar.push(c);
+  saveJar();
+}
+function storeCookies(res, url) {
+  let list = [];
+  if (Array.isArray(res.raw_headers)) list = res.raw_headers.filter(h => String(h[0]).toLowerCase() === 'set-cookie').map(h => h[1]);
+  else { const v = res.headers.get('set-cookie'); if (v) list = v.split(/,(?=\s*[^;,=\s]+=[^;,]*)/); }
+  list.forEach(s => setCookieStr(s, url, false));
+}
+
+const pageKeys = new Map();
+function registerPage(url) {
+  const key = Array.from(crypto.getRandomValues(new Uint8Array(10)), b => b.toString(16).padStart(2, '0')).join('');
+  let origin = 'null'; try { origin = new URL(url).origin; } catch {}
+  pageKeys.set(key, { url, origin });
+  if (pageKeys.size > 300) pageKeys.delete(pageKeys.keys().next().value);
+  return key;
+}
+
+/* ================= Network Layer (via libcurl) ================= */
+async function fetchRaw(url, { method = 'GET', headers = {}, body, cred = 'include', referer } = {}) {
+  const h = { 'User-Agent': navigator.userAgent, ...headers };
+  if (referer && !hasHeader(h, 'referer')) h['Referer'] = referer;
+  const isGet = /^(GET|HEAD)$/i.test(method);
+  if (referer && !hasHeader(h, 'origin')) {
+    try { const o = new URL(referer).origin; if (!isGet || o !== new URL(url).origin) h['Origin'] = o; } catch {}
+  }
+  if (cred !== 'omit' && !hasHeader(h, 'cookie')) { const c = cookieHeader(url); if (c) h['Cookie'] = c; }
+  const init = { method, headers: h, redirect: 'follow' };
+  if (body != null && !isGet) init.body = typeof body === 'string' ? body : new Uint8Array(body);
+  const res = await libcurl.fetch(url, init);
+  storeCookies(res, res.url || url);
+  return res;
+}
+const reply = (src, m, tr = []) => { try { src.postMessage({ miniRes: 1, ...m }, '*', tr); } catch {} };
+
+async function onFetch(d, src) {
+  try {
+    if (!/^https?:/i.test(d.url)) throw new Error('Unsupported protocol');
+    const res = await fetchRaw(d.url, { method: d.method || 'GET', headers: Object.fromEntries(d.headers || []),
+                                        body: d.body, cred: d.cred, referer: d.page });
+    const buf = await res.arrayBuffer();
+    const headers = [...res.headers.entries()].filter(([k]) => k.toLowerCase() !== 'set-cookie');
+    reply(src, { id: d.id, status: res.status, statusText: res.statusText || '', headers, url: res.url || d.url, body: buf }, [buf]);
+  } catch (err) { reply(src, { id: d.id, error: String(err && err.message || err) }); }
+}
+async function onFrame(d, src, hops) {
+  try {
+    if (!/^https?:/i.test(d.url)) throw new Error('bad url');
+    const res = await fetchRaw(d.url, { method: d.method || 'GET', body: d.body, referer: d.referer,
+                                        headers: d.contentType ? { 'Content-Type': d.contentType } : {} });
+    const buf = await res.arrayBuffer();
+    const ctype = (res.headers.get('content-type') || '').toLowerCase();
+    if (/attachment/i.test(res.headers.get('content-disposition') || '') || (ctype && !/text\/html|application\/xhtml/.test(ctype)))
+      return reply(src, { id: d.id, html: null });
+    reply(src, { id: d.id, html: buildPage(buf, ctype, res.url || d.url, hops + 1, false).html });
+  } catch (err) { reply(src, { id: d.id, html: null }); }
+}
+
+/* ================= Sandboxed Document JS Shim Injection ================= */
+function MINI_SHIM(M) {
+  'use strict';
+  var D = M.depth, isSub = D > 1, BASE = M.url;
+  var T = window; for (var i = 0; i < D; i++) T = T.parent;
+  var skip = /^(#|javascript:|mailto:|tel:|sms:|data:|blob:|about:)/i;
+
+  function post(m, tr) { try { T.postMessage(Object.assign({ mini: 1, key: M.key }, m), '*', tr || []); } catch (e) {} }
+  function abs(u) { try { return new URL(u, document.baseURI).href; } catch (e) { return null; } }
+  function def(o, k, d) { try { Object.defineProperty(o, k, d); } catch (e) {} }
+  function decode(buf, ct) {
+    var m = /charset=([^;\s]+)/i.exec(ct || '');
+    try { return new TextDecoder(m ? m[1] : 'utf-8').decode(buf); } catch (e) { return new TextDecoder().decode(buf); }
+  }
+
+  def(document, 'URL', { get: function () { return BASE; } });
+  def(document, 'documentURI', { get: function () { return BASE; } });
+  try { var host = new URL(BASE).hostname; def(document, 'domain', { get: function () { return host; }, set: function () {} }); } catch (e) {}
+
+  var cj = {};
+  (M.cookie || '').split('; ').forEach(function (p) { var i = p.indexOf('='); if (i > 0) cj[p.slice(0, i)] = p.slice(i + 1); });
+  def(document, 'cookie', {
+    get: function () { return Object.keys(cj).map(function (k) { return k + '=' + cj[k]; }).join('; '); },
+    set: function (s) {
+      s = String(s); var parts = s.split(';'), i = parts[0].indexOf('=');
+      var name = i >= 0 ? parts[0].slice(0, i).trim() : '', val = i >= 0 ? parts[0].slice(i + 1).trim() : parts[0].trim();
+      var dead = /max-age\s*=\s*(0|-)/i.test(s) || (/expires\s*=([^;]+)/i.test(s) && Date.parse(/expires\s*=([^;]+)/i.exec(s)[1]) < Date.now());
+      if (dead) delete cj[name]; else cj[name] = val;
+      post({ type: 'cookie', str: s });
+    }
+  });
+
+  function makeStorage(initial, onChange) {
+    var data = Object.create(null); for (var k in initial) data[k] = String(initial[k]);
+    var api = {
+      getItem: function (k) { k = String(k); return k in data ? data[k] : null; },
+      setItem: function (k, v) { data[String(k)] = String(v); onChange(data); },
+      removeItem: function (k) { delete data[String(k)]; onChange(data); },
+      clear: function () { for (var k in data) delete data[k]; onChange(data); },
+      key: function (i) { var ks = Object.keys(data); return i < ks.length ? ks[i] : null; }
+    };
+    return new Proxy(api, {
+      get: function (t, p) { if (p === 'length') return Object.keys(data).length; if (p in t) return t[p]; return typeof p === 'string' && p in data ? data[p] : undefined; },
+      set: function (t, p, v) { if (typeof p === 'string') { data[p] = String(v); onChange(data); } return true; },
+      deleteProperty: function (t, p) { delete data[p]; onChange(data); return true; },
+      has: function (t, p) { return p in t || p in data; },
+      ownKeys: function () { return Object.keys(data); },
+      getOwnPropertyDescriptor: function (t, p) { return p in data ? { value: data[p], enumerable: true, configurable: true, writable: true } : undefined; }
+    });
+  }
+  var lsTimer = 0;
+  var ls = makeStorage(M.ls || {}, function (data) {
+    clearTimeout(lsTimer);
+    lsTimer = setTimeout(function () { post({ type: 'ls', data: JSON.stringify(data) }); }, 300);
+  });
+  var ss = makeStorage({}, function () {});
+  def(window, 'localStorage', { get: function () { return ls; }, configurable: true });
+  def(window, 'sessionStorage', { get: function () { return ss; }, configurable: true });
+
+  var seq = 0, waiting = {};
+  window.addEventListener('message', function (e) {
+    var d = e.data;
+    if (!d || !d.miniRes || e.source !== T) return;
+    var w = waiting[d.id]; if (!w) return;
+    delete waiting[d.id];
+    if (d.error) w.rej(new TypeError(d.error)); else w.res(d);
+  });
+  function call(type, payload, tr) {
+    return new Promise(function (res, rej) {
+      var id = ++seq; waiting[id] = { res: res, rej: rej };
+      post(Object.assign({ type: type, id: id }, payload), tr);
+    });
+  }
+  function headerPairs(h) { var a = []; h.forEach(function (v, k) { a.push([k, v]); }); return a; }
+
+  var origFetch = window.fetch;
+  window.fetch = function (input, init) {
+    var req;
+    try { req = new Request(input, init); } catch (e) { return origFetch.apply(this, arguments); }
+    if (!/^https?:/i.test(req.url)) return origFetch.apply(this, arguments);
+    return new Promise(function (resolve, reject) {
+      var sig = req.signal;
+      if (sig) {
+        if (sig.aborted) return reject(new DOMException('The operation was aborted.', 'AbortError'));
+        sig.addEventListener('abort', function () { reject(new DOMException('The operation was aborted.', 'AbortError')); });
+      }
+      var isGet = /^(GET|HEAD)$/i.test(req.method);
+      (isGet ? Promise.resolve(null) : req.arrayBuffer()).then(function (buf) {
+        var hasBody = buf && buf.byteLength;
+        return call('fetch', { url: req.url, method: req.method, headers: headerPairs(req.headers), body: hasBody ? buf : null,
+                               page: BASE, cred: req.credentials }, hasBody ? [buf] : []);
+      }).then(function (r) {
+        var hs = new Headers();
+        r.headers.forEach(function (p) { try { hs.append(p[0], p[1]); } catch (e) {} });
+        var nullBody = [101, 204, 205, 304].indexOf(r.status) >= 0 || req.method === 'HEAD';
+        var st = r.status >= 200 && r.status <= 599 ? r.status : 200;
+        var res = new Response(nullBody ? null : r.body, { status: st, statusText: r.statusText, headers: hs });
+        def(res, 'url', { value: r.url });
+        def(res, 'redirected', { value: r.url !== req.url });
+        resolve(res);
+      }).catch(reject);
+    });
+  };
+
+  class MiniXHR extends EventTarget {
+    constructor() {
+      super();
+      this.readyState = 0; this.status = 0; this.statusText = ''; this.response = null; this.responseText = '';
+      this.responseURL = ''; this.responseType = ''; this.timeout = 0; this.withCredentials = false;
+      this.upload = new EventTarget(); this._h = []; this._rh = []; this._gen = 0;
+    }
+    _fire(type, prog) {
+      var ev;
+      try { ev = prog ? new ProgressEvent(type, prog) : new Event(type); } catch (e) { ev = new Event(type); }
+      this.dispatchEvent(ev);
+      var h = this['on' + type]; if (typeof h === 'function') { try { h.call(this, ev); } catch (e) { setTimeout(function () { throw e; }); } }
+    }
+    _state(n) { this.readyState = n; this._fire('readystatechange'); }
+    open(method, url, async) {
+      this._m = String(method || 'GET').toUpperCase(); this._u = abs(url); this._h = []; this._rh = [];
+      if (async === false) console.warn('[mini] synchronous XHR is not supported; running asynchronously');
+      this._state(1);
+    }
+    setRequestHeader(k, v) { this._h.push([k, v]); }
+    overrideMimeType(m) { this._mime = m; }
+    getResponseHeader(k) {
+      k = String(k).toLowerCase(); var out = [];
+      this._rh.forEach(function (p) { if (p[0].toLowerCase() === k) out.push(p[1]); });
+      return out.length ? out.join(', ') : null;
+    }
+    getAllResponseHeaders() { return this._rh.map(function (p) { return p[0] + ': ' + p[1]; }).join('\r\n') + (this._rh.length ? '\r\n' : ''); }
+    abort() {
+      if (!this._busy) return;
+      this._gen++; this._busy = false; this.readyState = 0; this.status = 0;
+      this._fire('abort'); this._fire('loadend');
+    }
+    send(body) {
+      var self = this, gen = ++this._gen, m = this._m || 'GET', url = this._u;
+      if (!url || !/^https?:/i.test(url)) { setTimeout(function () { self._fail('error', gen); }, 0); return; }
+      this._busy = true; this._fire('loadstart', { loaded: 0, total: 0 });
+      var hdrs = this._h.slice(), prep;
+      if (body == null || /^(GET|HEAD)$/.test(m)) prep = Promise.resolve(null);
+      else {
+        var rq; try { rq = new Request(url, { method: 'POST', body: body }); } catch (e) { rq = null; }
+        prep = rq ? rq.arrayBuffer().then(function (buf) {
+          var hasCT = hdrs.some(function (p) { return p[0].toLowerCase() === 'content-type'; });
+          var ct = rq.headers.get('content-type'); if (!hasCT && ct) hdrs.push(['Content-Type', ct]);
+          return buf;
+        }) : Promise.resolve(String(body));
+      }
+      var timer = this.timeout > 0 ? setTimeout(function () { self._fail('timeout', gen); }, this.timeout) : 0;
+      prep.then(function (buf) {
+        return call('fetch', { url: url, method: m, headers: hdrs, body: buf, page: BASE, cred: self.withCredentials ? 'include' : 'same-origin' },
+                    buf && typeof buf !== 'string' ? [buf] : []);
+      }).then(function (r) {
+        if (gen !== self._gen) return;
+        clearTimeout(timer);
+        self.status = r.status; self.statusText = r.statusText; self.responseURL = r.url; self._rh = r.headers;
+        self._state(2);
+        var ct = self.getResponseHeader('content-type') || self._mime || '', rt = self.responseType, text;
+        if (rt === 'arraybuffer') self.response = r.body;
+        else if (rt === 'blob') self.response = new Blob([r.body], { type: ct });
+        else {
+          text = decode(r.body, ct); self.responseText = text;
+          if (rt === 'json') { try { self.response = JSON.parse(text); } catch (e) { self.response = null; } }
+          else if (rt === 'document') { try { self.response = new DOMParser().parseFromString(text, /xml/i.test(ct) ? 'text/xml' : 'text/html'); } catch (e) { self.response = null; } }
+          else self.response = text;
+        }
+        self._state(3); self._busy = false; self._state(4);
+        var n = r.body.byteLength, p = { loaded: n, total: n, lengthComputable: true };
+        self._fire('progress', p); self._fire('load', p); self._fire('loadend', p);
+      }).catch(function () { clearTimeout(timer); self._fail('error', gen); });
+    }
+    _fail(type, gen) {
+      if (gen !== this._gen) return;
+      this._busy = false; this.status = 0; this.readyState = 4;
+      this._fire('readystatechange'); this._fire(type); this._fire('loadend');
+    }
+  }
+  ['UNSENT', 'OPENED', 'HEADERS_RECEIVED', 'LOADING', 'DONE'].forEach(function (n, i) { def(MiniXHR, n, { value: i }); def(MiniXHR.prototype, n, { value: i }); });
+  window.XMLHttpRequest = MiniXHR;
+  navigator.sendBeacon = function (u, data) { try { window.fetch(u, { method: 'POST', body: data, keepalive: true }).catch(function () {}); return true; } catch (e) { return false; } };
+
+  function go(url, extra) {
+    if (!url) return;
+    if (isSub) { try { parent.postMessage(Object.assign({ miniFrameNav: 1, url: url }, extra || {}), '*'); } catch (e) {} }
+    else post(Object.assign({ type: 'nav', url: url }, extra || {}));
+  }
+
+  window.addEventListener('click', function (e) {
+    if (e.defaultPrevented) return;
+    var a = e.target && e.target.closest ? e.target.closest('a[href], area[href]') : null;
+    if (!a) return;
+    var raw = (a.getAttribute('href') || '').trim();
+    if (!raw || /^(javascript:|mailto:|tel:|sms:|data:|blob:|about:)/i.test(raw)) return;
+    e.preventDefault();
+    if (raw.charAt(0) === '#') {
+      if (raw === '#' || raw.toLowerCase() === '#top') window.scrollTo(0, 0); else location.hash = raw.slice(1);
+      return;
+    }
+    if (a.hasAttribute('download')) { post({ type: 'download', url: a.href, name: a.getAttribute('download') }); return; }
+    go(a.href);
+  });
+  window.addEventListener('auxclick', function (e) {
+    if (e.defaultPrevented || e.button !== 1) return;
+    var a = e.target && e.target.closest ? e.target.closest('a[href]') : null;
+    var raw = a && (a.getAttribute('href') || '').trim();
+    if (a && raw && !skip.test(raw)) { e.preventDefault(); go(a.href); }
+  });
+
+  function doSubmit(f, sub) {
+    var action = (sub && sub.getAttribute('formaction')) || f.getAttribute('action');
+    var url = action ? abs(action) : BASE.split('#')[0];
+    if (!url || !/^https?:/i.test(url)) return;
+    var method = ((sub && sub.getAttribute('formmethod')) || f.getAttribute('method') || 'get').toLowerCase();
+    var enc = ((sub && sub.getAttribute('formenctype')) || f.getAttribute('enctype') || '').toLowerCase();
+    var fd = new FormData(f);
+    if (sub && sub.name) fd.append(sub.name, sub.value);
+    if (method === 'post') {
+      if (enc.indexOf('multipart') === 0) {
+        var rq = new Request(url, { method: 'POST', body: fd });
+        rq.arrayBuffer().then(function (buf) { go(url, { method: 'POST', body: buf, contentType: rq.headers.get('content-type') }); });
+      } else {
+        var usp = new URLSearchParams();
+        fd.forEach(function (v, k) { usp.append(k, typeof v === 'string' ? v : (v.name || '')); });
+        go(url, { method: 'POST', body: usp.toString(), contentType: 'application/x-www-form-urlencoded' });
+      }
+    } else {
+      var u = new URL(url), q = new URLSearchParams();
+      fd.forEach(function (v, k) { q.append(k, typeof v === 'string' ? v : (v.name || '')); });
+      u.search = ''; q.forEach(function (v, k) { u.searchParams.append(k, v); }); u.hash = '';
+      go(u.href);
+    }
+  }
+  window.addEventListener('submit', function (e) {
+    if (e.defaultPrevented) return;
+    e.preventDefault(); doSubmit(e.target, e.submitter);
+  });
+  HTMLFormElement.prototype.submit = function () { doSubmit(this, null); };
+
+  if (window.navigation && navigation.addEventListener) {
+    navigation.addEventListener('navigate', function (e) {
+      try {
+        if (e.navigationType === 'traverse' || e.destination.sameDocument || !e.cancelable) return;
+        if (e.navigationType === 'reload') { if (!isSub) { e.preventDefault(); post({ type: 'reload' }); } return; }
+        var u = e.destination.url;
+        if (!/^https?:/i.test(u)) return;
+        e.preventDefault();
+        var hashAt = u.indexOf('#');
+        if (hashAt >= 0 && u.slice(0, hashAt) === BASE.split('#')[0]) location.hash = u.slice(hashAt + 1);
+        else go(u);
+      } catch (x) {}
+    });
+  }
+
+  ['pushState', 'replaceState'].forEach(function (k) {
+    var orig = history[k];
+    history[k] = function (s, t, u) {
+      var real = u != null ? abs(u) : null;
+      try { orig.apply(history, arguments); } catch (e) { try { orig.call(history, s, t); } catch (e2) {} }
+      if (real && !isSub && /^https?:/i.test(real)) post({ type: 'hash', url: real });
+    };
+  });
+  window.addEventListener('hashchange', function () { if (!isSub) post({ type: 'hash', url: BASE.split('#')[0] + location.hash }); });
+
+  var fakeWin = { closed: false, close: function () {}, focus: function () {}, blur: function () {}, postMessage: function () {},
+                  document: { write: function () {}, writeln: function () {}, close: function () {}, open: function () {} },
+                  location: { href: '', assign: function () {}, replace: function () {} } };
+  window.open = function (u) { if (u && !skip.test(String(u).trim())) go(abs(u)); return fakeWin; };
+  document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('a[target], form[target]').forEach(function (n) { n.removeAttribute('target'); });
+  });
+
+  function loadFrame(el, spec, raw) {
+    call('frame', { url: spec.url, method: spec.method, body: spec.body, contentType: spec.contentType, referer: BASE })
+      .then(function (r) {
+        if (r.html != null) { el.removeAttribute('src'); el.srcdoc = r.html; }
+        else if (raw) { el.__miniSkip = raw; el.setAttribute('src', raw); }
+      }).catch(function () { if (raw) { el.__miniSkip = raw; el.setAttribute('src', raw); } });
+  }
+  function watchFrame(el) {
+    if (el.hasAttribute('srcdoc')) return;
+    var raw = el.getAttribute('src'); if (!raw) return;
+    if (el.__miniSkip === raw) return;
+    raw = raw.trim(); if (skip.test(raw)) return;
+    var u = abs(raw); if (!u || !/^https?:/i.test(u)) return;
+    el.removeAttribute('src');
+    loadFrame(el, { url: u }, raw);
+  }
+  function scan(n) {
+    if (n.nodeType !== 1) return;
+    if (n.tagName === 'IFRAME') watchFrame(n);
+    if (n.querySelectorAll) n.querySelectorAll('iframe').forEach(watchFrame);
+  }
+  new MutationObserver(function (ms) {
+    ms.forEach(function (m) {
+      if (m.type === 'attributes') { if (m.target.tagName === 'IFRAME') watchFrame(m.target); }
+      else m.addedNodes.forEach(scan);
+    });
+  }).observe(document, { childList: true, subtree: true, attributes: true, attributeFilter: ['src'] });
+  
+  window.addEventListener('message', function (e) {
+    var d = e.data; if (!d || !d.miniFrameNav) return;
+    var fr = document.getElementsByTagName('iframe');
+    for (var i = 0; i < fr.length; i++) if (fr[i].contentWindow === e.source) {
+      if (/^https?:/i.test(d.url)) loadFrame(fr[i], d, null);
+      return;
+    }
+  });
+
+  function fixCss(css, base) {
+    function A(p) { try { return new URL(p, base).href; } catch (e) { return null; } }
+    return css.replace(/url\(\s*(['"]?)(?!data:|blob:|https?:|#)([^)'"]+?)\1\s*\)/gi, function (m, q, p) { var a = A(p); return a ? 'url("' + a + '")' : m; })
+              .replace(/@import\s+(['"])(?!https?:)([^'"]+)\1/gi, function (m, q, p) { var a = A(p); return a ? '@import "' + a + '"' : m; });
+  }
+  window.addEventListener('error', function (e) {
+    var el = e.target;
+    if (!el || el === window || !el.tagName || el.__retry) return;
+    var tag = el.tagName, attr = tag === 'LINK' ? 'href' : 'src';
+    if (tag === 'LINK' ? !/stylesheet/i.test(el.rel || '') : (tag !== 'SCRIPT' && tag !== 'IMG')) return;
+    var u = abs(el.getAttribute(attr) || ''); if (!u || !/^https?:/i.test(u)) return;
+    el.__retry = 1;
+    call('fetch', { url: u, method: 'GET', headers: [], body: null, page: BASE, cred: 'omit' }).then(function (r) {
+      if (r.status >= 400) return;
+      var ct = (r.headers.filter(function (p) { return p[0].toLowerCase() === 'content-type'; })[0] || [0, ''])[1];
+      if (tag === 'SCRIPT') {
+        var s = document.createElement('script');
+        for (var i = 0; i < el.attributes.length; i++) { var n = el.attributes[i].name; if (!/^(src|integrity|crossorigin)$/i.test(n)) s.setAttribute(n, el.attributes[i].value); }
+        s.async = false; s.__retry = 1;
+        s.src = URL.createObjectURL(new Blob([r.body], { type: 'text/javascript' }));
+        el.parentNode && el.parentNode.insertBefore(s, el.nextSibling);
+      } else if (tag === 'LINK') {
+        var l = document.createElement('link'); l.rel = 'stylesheet'; if (el.media) l.media = el.media; l.__retry = 1;
+        l.href = URL.createObjectURL(new Blob([fixCss(decode(r.body, ct), u)], { type: 'text/css' }));
+        el.parentNode && el.parentNode.insertBefore(l, el.nextSibling);
+      } else {
+        el.removeAttribute('srcset'); el.src = URL.createObjectURL(new Blob([r.body], { type: ct || 'image/*' }));
+      }
+    }).catch(function () {});
+  }, true);
+
+  document.addEventListener('keydown', function (e) {
+    if (isSub) return;
+    if (e.altKey || e.ctrlKey || e.metaKey || e.key === 'Escape') {
+      if (e.altKey || ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'l')) e.preventDefault();
+      post({ type: 'key', key: e.key, alt: e.altKey, ctrl: e.ctrlKey, meta: e.metaKey, shift: e.shiftKey });
+    }
+  }, true);
+}
+
+/* ================= HTML Document Refinement ================= */
+function buildPage(buf, ctype, finalUrl, depth, canRedirect) {
+  let html = decodeBody(buf, ctype);
+
+  if (canRedirect) {
+    const mr = /<meta[^>]+http-equiv=["']?refresh["']?[^>]*content=["']?\s*\d*\s*;?\s*url=\s*['"]?([^'">\s]+)/i.exec(html);
+    if (mr) { const u = resolveUrl(decodeEntities(mr[1]), finalUrl); if (u && u !== finalUrl) return { redirect: u }; }
+  }
+
+  const pb = /<base[^>]+href=["']([^"']+)["']/i.exec(html);
+  const baseHref = pb ? (resolveUrl(pb[1], finalUrl) || finalUrl) : finalUrl;
+
+  html = html.replace(/<meta[^>]+http-equiv=["']?(content-security-policy|x-frame-options|refresh)["']?[^>]*>/gi, '')
+             .replace(/<base\b[^>]*>/gi, '')
+             .replace(/\sintegrity=("[^"]*"|'[^']*')/gi, '')
+             .replace(/\scrossorigin(=("[^"]*"|'[^']*'|[^\s>]+))?/gi, '');
+
+  const key = registerPage(finalUrl);
+  let origin = 'null'; try { origin = new URL(finalUrl).origin; } catch {}
+  let lsData = {}; try { lsData = JSON.parse(store.get('mini:ls:' + origin) || '{}'); } catch {}
+  const boot = { url: finalUrl, depth, key, cookie: pageCookies(finalUrl), ls: lsData };
+
+  const inject = `<base href="${baseHref.replace(/"/g, '&quot;')}">` +
+    '<scr' + 'ipt>(' + MINI_SHIM.toString() + ')(' + safeJson(boot) + ');</scr' + 'ipt>';
+  if (/<head(\s[^>]*)?>/i.test(html)) html = html.replace(/<head(\s[^>]*)?>/i, m => m + inject);
+  else if (/<html(\s[^>]*)?>/i.test(html)) html = html.replace(/<html(\s[^>]*)?>/i, m => m + '<head>' + inject + '</head>');
+  else html = '<!DOCTYPE html><head>' + inject + '</head>' + html;
+  return { html };
+}
+
+/* ================= Tab-Aware Navigation Engine ================= */
+async function navigate(target, opts = {}, targetTab = getActiveTab()) {
+  if (!targetTab) return;
+  const { method = 'GET', body, contentType, push = true, metaDepth = 0, referer } = opts;
+  
+  if (!ready) { 
+    pending = { target, opts }; 
+    setStatus('Waiting for Bubber Mini runtime to finish booting…', '', targetTab); 
+    return; 
+  }
+  
+  const my = ++targetTab.token;
+  setLoading(targetTab, true);
+  setStatus('Loading ' + target + ' on the bubbernet...', '', targetTab);
+
+  try {
+    const headers = {};
+    if (body != null) headers['Content-Type'] = contentType || 'application/x-www-form-urlencoded';
+    const res = await fetchRaw(target, { method, headers, body, referer });
+    if (my !== targetTab.token) return;
+
+    const finalUrl = res.url || target;
+    const ctype = (res.headers.get('content-type') || '').toLowerCase();
+    const disp = res.headers.get('content-disposition') || '';
+
+    const refreshHdr = res.headers.get('refresh');
+    if (refreshHdr && metaDepth < MAX_META_REFRESH) {
+      const m = /url=\s*['"]?([^'";]+)/i.exec(refreshHdr);
+      if (m) { const u = resolveUrl(m[1], finalUrl); if (u) return navigate(u, { push, metaDepth: metaDepth + 1 }, targetTab); }
+    }
+
+    const buf = await res.arrayBuffer();
+    if (my !== targetTab.token) return;
+
+    const finishDownload = () => {
+      const name = filenameFrom(disp, finalUrl);
+      saveBlob(new Blob([buf], { type: ctype }), name);
+      setLoading(targetTab, false);
+      setStatus('Downloaded ' + name, 'ok', targetTab);
+    };
+    if (/attachment/i.test(disp)) return finishDownload();
+
+    let page;
+    const isHtml = !ctype || /text\/html|application\/xhtml/.test(ctype);
+    if (isHtml) {
+      const built = buildPage(buf, ctype, finalUrl, 1, metaDepth < MAX_META_REFRESH);
+      if (built.redirect) return navigate(built.redirect, { push, metaDepth: metaDepth + 1 }, targetTab);
+      page = { html: built.html };
+      
+      // Try to parse Document title dynamically
+      const titleM = /<title[^>]*>(.*?)<\/title>/i.exec(built.html);
+      targetTab.title = titleM ? decodeEntities(titleM[1]).trim() : new URL(finalUrl).hostname;
+    } else if (/^(image|video|audio)\/|application\/pdf|^text\/|json|xml|javascript|ecmascript/.test(ctype)) {
+      page = { blob: new Blob([buf], { type: ctype }) };
+      targetTab.title = new URL(finalUrl).pathname.split('/').pop() || new URL(finalUrl).hostname;
+    } else {
+      return finishDownload();
+    }
+
+    targetTab.url = finalUrl;
+    const entry = { url: finalUrl, method, body, contentType };
+    if (push || targetTab.idx < 0) { 
+      targetTab.history = targetTab.history.slice(0, targetTab.idx + 1); 
+      targetTab.history.push(entry); 
+      targetTab.idx = targetTab.history.length - 1; 
+    } else {
+      targetTab.history[targetTab.idx] = entry;
+    }
+
+    showPage(page, targetTab);
+    
+    if (targetTab === getActiveTab()) {
+      showHome(false);
+      $('address-bar').value = finalUrl;
+      urlInput.value = finalUrl;
+      setStatus(finalUrl !== target ? 'Redirected to ' + finalUrl : (res.ok ? '' : `HTTP ${res.status}`), res.ok ? '' : 'err', targetTab);
+    }
+  } catch (err) {
+    if (my !== targetTab.token) return;
+    console.error(err);
+    showError(target, err, targetTab);
+  } finally {
+    if (my === targetTab.token) {
+      setLoading(targetTab, false);
+      if (targetTab === getActiveTab()) updateNavButtons();
+    }
+  }
+}
+
+function showPage(page, targetTab) {
+  if (targetTab.blobUrl) { URL.revokeObjectURL(targetTab.blobUrl); targetTab.blobUrl = null; }
+  if (page.html != null) { 
+    targetTab.iframe.removeAttribute('src'); 
+    targetTab.iframe.srcdoc = page.html; 
+  } else { 
+    targetTab.blobUrl = URL.createObjectURL(page.blob); 
+    targetTab.iframe.removeAttribute('srcdoc'); 
+    targetTab.iframe.src = targetTab.blobUrl; 
+  }
+  
+  if (targetTab === getActiveTab()) {
+    tabs.forEach(t => t.iframe.classList.remove('on'));
+    targetTab.iframe.classList.add('on');
+  }
+}
+
+function showError(target, err, targetTab) {
+  const msg = String(err && err.message || err);
+  const esc = s => s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  
+  const errorHtml = `<!DOCTYPE html><meta charset="utf-8"><body style="font-family:'Fredoka',sans-serif;background:#121315;color:#f2f3f5;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;text-align:center">
+    <div style="max-width:480px;padding:24px;background:#1e1f22;border:3px solid #f87171;border-radius:24px;box-shadow:0 10px 30px rgba(248,113,113,0.1)"><h2 style="margin:0 0 8px;color:#f87171">Can't reach this page</h2>
+    <p style="color:#949ba4;word-break:break-all;font-size:15px;margin-bottom:16px;">${esc(target)}</p>
+    <p style="background:rgba(248,113,113,0.1);padding:10px;border-radius:12px;color:#f87171;font-size:14px;border:1px dashed #f87171;margin-bottom:16px;">${esc(msg)}</p>
+    <p style="color:#949ba4;font-size:14px;margin:0;">Double check the link details, or click <kbd style="background:#121315;padding:2px 6px;border-radius:6px;border:1px solid #2b2d31;">Alt+R</kbd> to refresh.</p></div></body>`;
+
+  targetTab.title = 'Error Page';
+  showPage({ html: errorHtml }, targetTab);
+  
+  if (targetTab.idx < 0 || targetTab.history[targetTab.idx].url !== target) {
+    targetTab.history = targetTab.history.slice(0, targetTab.idx + 1); 
+    targetTab.history.push({ url: target, method: 'GET' });
+    targetTab.idx = targetTab.history.length - 1;
+  }
+  
+  if (targetTab === getActiveTab()) {
+    showHome(false);
+    setStatus('Failed to load: ' + msg, 'err', targetTab);
+  }
+  renderTabs();
+}
+
+async function downloadUrl(url, name, targetTab = getActiveTab()) {
+  try {
+    setStatus('Downloading…', '', targetTab);
+    const res = await fetchRaw(url, { referer: targetTab.idx >= 0 ? targetTab.history[targetTab.idx].url : undefined });
+    saveBlob(new Blob([await res.arrayBuffer()], { type: res.headers.get('content-type') || '' }),
+             name || filenameFrom(res.headers.get('content-disposition'), res.url || url));
+    setStatus('Download complete', 'ok', targetTab);
+  } catch (e) { setStatus('Download failed: ' + e.message, 'err', targetTab); }
+}
+
+/* ================= Dynamic Utility Navigation Triggers ================= */
+function feelingChimppy() {
+  const chimpySites = [
+    "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+    "https://www.youtube.com/watch?v=09uBkh-xIrw", 
+    "https://theuselessweb.com/",
+    "https://puginarug.com/",
+    "https://zoomquilt.org/",
+    "https://www.windows93.net/",
+    "https://search.brave.com/search?q=2004%20toyota%20corolla",
+    "https://globbychase3d.wasmer.app/",
+    "https://f1-random-gp.pages.dev"
+  ];
+  const randomSite = chimpySites[Math.floor(Math.random() * chimpySites.length)];
+  navigate(randomSite);
+}
+
+function famousSound() {
+  const audios = [
+    "https://audioforaproject.wasmer.app/galabadoodle.html",
+    "https://audioforaproject.wasmer.app/getto.html",
+    "https://audioforaproject.wasmer.app/hoss.html",
+    "https://audioforaproject.wasmer.app/chimpass.html",
+    "https://audioforaproject.wasmer.app/globby.html",
+    "https://audioforaproject.wasmer.app/globaba.html",
+    "https://audioforaproject.wasmer.app/tatastore.html",
+    "https://audioforaproject.wasmer.app/100.html",
+    "https://audioforaproject.wasmer.app/bees.html",
+  ];
+  const randomSound = audios[Math.floor(Math.random() * audios.length)];
+  navigate(randomSound);
+}
+
+/* ================= Chrome Control Triggers ================= */
+function goBack(tab = getActiveTab()) { 
+  if (tab && tab.idx > 0) { 
+    tab.idx--; 
+    const h = tab.history[tab.idx]; 
+    navigate(h.url, { ...h, push: false }, tab); 
+  } 
+}
+function goForward(tab = getActiveTab()) { 
+  if (tab && tab.idx < tab.history.length - 1) { 
+    tab.idx++; 
+    const h = tab.history[tab.idx]; 
+    navigate(h.url, { ...h, push: false }, tab); 
+  } 
+}
+function reload(tab = getActiveTab()) { 
+  if (tab && tab.idx >= 0) { 
+    const h = tab.history[tab.idx]; 
+    navigate(h.url, { ...h, push: false }, tab); 
+  } 
+}
+function goHome(tab = getActiveTab()) {
+  if (tab) {
+    tab.url = '';
+    tab.title = 'New Tab';
+    showHome(true);
+    renderTabs();
+  }
+}
+
+function updateNavButtons() {
+  const tab = getActiveTab();
+  if (!tab) return;
+  $('back-btn').disabled = tab.idx <= 0;
+  $('forward-btn').disabled = tab.idx >= tab.history.length - 1;
+}
+
+function handleKey(k, tab = getActiveTab()) {
+  const key = (k.key || '').toLowerCase(), mod = k.ctrl || k.meta;
+  if (k.alt && k.key === 'ArrowLeft') goBack(tab);
+  else if (k.alt && k.key === 'ArrowRight') goForward(tab);
+  else if (k.alt && k.shift && key === 'delete') { jar = []; store.clearAll(); setStatus('Cookies and site data cleared', 'ok', tab); }
+  else if (k.alt && key === 'r') reload(tab);
+  else if ((mod || k.alt) && key === 'l') {
+    if (tab === getActiveTab()) {
+      showHome(true);
+    }
+  }
+  else if (k.alt && key === 'home') { goHome(tab); }
+  else if (k.key === 'Escape' && tab && tab.url && !home.classList.contains('hidden')) {
+    if (tab === getActiveTab()) showHome(false);
+  }
+}
+
+document.addEventListener('keydown', e => {
+  const k = { key: e.key, alt: e.altKey, ctrl: e.ctrlKey, meta: e.metaKey, shift: e.shiftKey };
+  if (e.altKey || ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'l')) e.preventDefault();
+  handleKey(k);
+});
+
+/* ================= Message Relay & Tab Routing ================= */
+function findTabByWindow(win) {
+  for (const tab of tabs) {
+    try {
+      let x = win;
+      while (x && x !== window) {
+        if (x === tab.iframe.contentWindow) return tab;
+        x = x.parent;
+      }
+    } catch {}
+  }
+  return null;
+}
+
+function hopsFromTab(tab, w) {
+  try {
+    let n = 0, x = w;
+    while (x && x !== window && n < 10) {
+      n++;
+      if (x.parent === window) return x === tab.iframe.contentWindow ? n : 0;
+      x = x.parent;
+    }
+  } catch {}
+  return 0;
+}
+
+window.addEventListener('message', e => {
+  const d = e.data;
+  if (!d || !d.mini) return;
+  
+  const tab = findTabByWindow(e.source);
+  if (!tab) return;
+  
+  const hops = hopsFromTab(tab, e.source);
+  if (!hops) return;
+
+  const pg = pageKeys.get(d.key);
+  const top = hops === 1;
+  switch (d.type) {
+    case 'fetch': onFetch(d, e.source); break;
+    case 'frame': onFrame(d, e.source, hops); break;
+    case 'cookie': if (pg && typeof d.str === 'string') setCookieStr(d.str, pg.url, true); break;
+    case 'ls': if (pg && typeof d.data === 'string' && d.data.length < 4e6) store.set('mini:ls:' + pg.origin, d.data); break;
+    case 'nav':
+      if (top && /^https?:/i.test(d.url))
+        navigate(d.url, { method: d.method || 'GET', body: d.body, contentType: d.contentType, referer: tab.idx >= 0 ? tab.history[tab.idx].url : undefined }, tab);
+      break;
+    case 'download': if (top && /^https?:/i.test(d.url)) downloadUrl(d.url, d.name, tab); break;
+    case 'hash': 
+      if (top && tab.idx >= 0 && /^https?:/i.test(d.url)) {
+        tab.history[tab.idx] = { ...tab.history[tab.idx], url: d.url };
+        tab.url = d.url;
+        if (tab === getActiveTab()) $('address-bar').value = d.url;
+      }
+      break;
+    case 'reload': if (top) reload(tab); break;
+    case 'key': if (top) handleKey(d, tab); break;
+  }
+});
+
+/* ================= UI Binding & Submissions ================= */
+$('homeForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const t = normalizeInput(urlInput.value);
+  if (t) navigate(t);
+});
+
+$('address-bar').addEventListener('keydown', e => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    const t = normalizeInput($('address-bar').value);
+    if (t) navigate(t);
+  }
+});
+
+function initialTarget() {
+  const q = new URLSearchParams(location.search).get('url') || decodeURIComponent(location.hash.slice(1));
+  return q ? normalizeInput(q) : null;
+}
+
+function loadLibcurl() {
+  return new Promise((resolve, reject) => {
+    if (libcurl.ready) return resolve();
+    const timer = setTimeout(() => reject(new Error('timed out loading libcurl.wasm')), 30000);
+    libcurl.onload = () => { clearTimeout(timer); resolve(); };
+    try {
+      const r = libcurl.load_wasm(LIBCURL_BASE + 'libcurl.wasm');
+      if (r && typeof r.catch === 'function') r.catch(e => { clearTimeout(timer); reject(e); });
+    } catch (e) { clearTimeout(timer); reject(e); }
+  });
+}
+
+window.addEventListener('load', async () => {
+  // Spawn initial active tab
+  createNewTab();
+  
+  urlInput.focus();
+  try {
+    await loadLibcurl();
+    libcurl.set_websocket(GATEWAY);
+    ready = true;
+    goBtn.disabled = false; goBtn.textContent = 'Graggle Search';
+    setStatus('Ready to explore!', 'ok');
+    
+    const init = initialTarget();
+    if (pending) { 
+      const p = pending; pending = null; 
+      navigate(p.target, p.opts); 
+    } else if (init) {
+      navigate(init);
+    }
+  } catch (e) {
+    console.error(e);
+    goBtn.textContent = 'Engine Crash';
+    setStatus('Bubber network WASM initialization failed: ' + e.message, 'err');
+  }
+});
+</script>
+</body>
+</html>
