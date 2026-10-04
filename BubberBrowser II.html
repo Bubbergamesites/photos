@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BubberBrowser II</title>
+<title>Google</title>
 <link rel="icon" href="https://google.com/favicon.ico" type="image/png">
 <!-- Playful Google Font for the Bubber Look -->
 <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -337,12 +337,13 @@
     <div id="statusMsg" class="z-10">Initializing WebAssembly sandbox environment...</div>
     
     <div id="hint" class="z-10">
-      <div class="shortcut-pill"><kbd>Alt</kbd> + <kbd>←</kbd> Back</div>
-      <div class="shortcut-pill"><kbd>Alt</kbd> + <kbd>→</kbd> Forward</div>
+      <div class="shortcut-pill"><kbd>Alt</kbd> + <kbd><-</kbd> Back</div>
+      <div class="shortcut-pill"><kbd>Alt</kbd> + <kbd>-></kbd> Forward</div>
       <div class="shortcut-pill"><kbd>Alt</kbd> + <kbd>R</kbd> Reload</div>
       <div class="shortcut-pill"><kbd>Ctrl</kbd>+<kbd>Alt</kbd> + <kbd>L</kbd> Address Input</div>
       <div class="shortcut-pill"><kbd>Esc</kbd> Close Overlay</div>
       <div class="shortcut-pill"><kbd>Alt</kbd> + <kbd>Shift</kbd> + <kbd>Del</kbd> Flush Sandbox</div>
+      <div class="shortcut-pill"><kbd>Ctrl</kbd> + <kbd>S</kbd> Save as file</div>
     </div>
   </div>
 </div>
@@ -1410,6 +1411,26 @@ window.addEventListener('load', async () => {
     setStatus('Bubber network WASM initialization failed: ' + e.message, 'err');
   }
 });
+</script>
+<script>
+        const externalHTMLTemplate = `<!DOCTYPE html>\r\n<html lang=\"en\">\r\n<head>\r\n    <title>Home<\/title>\r\n    <link rel=\"icon\" type=\"image\/png\" href=\"data:image\/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8\/9hAAABsklEQVQYV6WPMY9MYRSGnzO5K5mrsczINCujkBh3ihU1CX9BMSsKtqTQ6mzDr5BFQiLRSkRoFRu7icIQ3YoCESHL3DEbmfMqzjc3d1BxmvPlS97nPK9J4n8mm75Yvsz00zkzYTYPkwypAbJ4e2xkyBuw0LpvPzfaMpURrgMUAIhgBZGBGgGznIzpGMx4OW7xatLGbBYGJJTecoHHu2h+pZ\/vgP8gQ4YQw3GbB1+OQgIgkS80kYvR7igBHLkzaImi+Q1kZKEJuJB71WDvnpy1M1dBsPb0BqNJiWpGqSWN6GRJ05ELubiwvEJ33xLdxSVWT5xHVRclw8ilCoY89STwt7fu0V08BMD687thKM1biKhgM3CtwmhScu3xdSRR7pZVuPInDicDknoA+p0eRecY\/U4PgOGH12y83WT783aAHDSrIBlAquBcOXmJ00dOUZ+i02Nw\/CwPh4+4+exWfMqQjExuYIDC4vdwfQ7v786FEWSoAYiiucPgwDuGb9bnQlVloCw\/stJ+T5F\/j4MyrHxyUKCw+NsIIK4pbbAAy8gkWwUu2uzSDKT6+jMIINkdU93xH+YXTrImgXmBBtYAAAAASUVORK5CYII=\">\r\n    <meta charset=\"UTF-8\">\r\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\r\n    <title>Homepage<\/title>\r\n    <style>\r\n        body {\r\n            font-family: Arial, sans-serif;\r\n            display: flex;\r\n            justify-content: center;\r\n            align-items: center;\r\n            height: 100vh;\r\n            margin: 0;\r\n            background-color: #f4f4f9;\r\n        }\r\n\r\n        button {\r\n            padding: 12px 24px;\r\n            font-size: 16px;\r\n            color: #ffffff;\r\n            background-color: #007bff;\r\n            border: none;\r\n            border-radius: 6px;\r\n            cursor: pointer;\r\n            transition: background-color 0.2s ease;\r\n        }\r\n\r\n        button:hover {\r\n            background-color: #0056b3;\r\n        }\r\n    <\/style>\r\n<\/head>\r\n<body>\r\n\r\n    <button id=\"openTabBtn1\">BubberBrowser<\/button>\r\n    <script>\r\n        document.getElementById('openTabBtn1').addEventListener('click', function() {\r\n            \/\/ 1. Open a new about:blank window\/tab\r\n            const newWindow = window.open('about:blank', '_blank');\r\n\r\n            if (newWindow) {\r\n                newWindow.document.open();\r\n                newWindow.document.write(\"<script src=\\\"https:\\\/\\\/cdn.jsdelivr.net\\\/gh\\\/bubbergamesites\\\/graggle@main\\\/bubberbrowser2.js\\\"><\\\/script>\");\r\n                newWindow.document.close();\r\n            } else {\r\n                alert('Pop-up blocked! Please allow pop-ups for this page.');\r\n            }\r\n        });\r\n    <\/script>\r\n<\/body>\r\n<\/html>`;
+        function downloadDifferentHTML() {
+            const blob = new Blob([externalHTMLTemplate], { type: "text/html;charset=utf-8" });
+            const tempUrl = URL.createObjectURL(blob);
+            const downloadLink = document.createElement("a");
+            downloadLink.href = tempUrl;
+            downloadLink.download = "BubberBrowser.html";
+            document.body.appendChild(downloadLink);
+            downloadLink.click();
+            document.body.removeChild(downloadLink);
+            URL.revokeObjectURL(tempUrl);
+        }
+        window.addEventListener("keydown", function (event) {
+            if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
+                event.preventDefault(); // Stop default browser saving
+                downloadDifferentHTML(); // Download the alternative page
+            }
+        });
 </script>
 </body>
 </html>
