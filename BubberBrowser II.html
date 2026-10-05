@@ -238,11 +238,19 @@
             height: 100%;
             border: 0;
             background: #fff;
-            display: none;
+            display: block;
+            /* Never display:none a tab frame: a frame that has no layout while its
+               document loads is what produced the blank white page until you
+               switched tabs. Hidden tabs stay laid out and just become invisible. */
+            visibility: hidden;
+            pointer-events: none;
+            z-index: 0;
         }
 
         iframe.on {
-            display: block;
+            visibility: visible;
+            pointer-events: auto;
+            z-index: 1;
         }
 
         /* Home Overlay */
@@ -664,8 +672,8 @@
             <div id="statusMsg" class="z-10">Initializing WebAssembly sandbox environment...</div>
 
             <div id="hint" class="z-10">
-                <div class="shortcut-pill"><kbd>Alt</kbd> + <kbd>&larr;</kbd> Back</div>
-                <div class="shortcut-pill"><kbd>Alt</kbd> + <kbd>&rarr;</kbd> Forward</div>
+                <div class="shortcut-pill"><kbd>Alt</kbd> + <kbd>←</kbd> Back</div>
+                <div class="shortcut-pill"><kbd>Alt</kbd> + <kbd>→</kbd> Forward</div>
                 <div class="shortcut-pill"><kbd>Alt</kbd> + <kbd>R</kbd> Reload</div>
                 <div class="shortcut-pill"><kbd>Ctrl</kbd>+<kbd>Alt</kbd> + <kbd>L</kbd> Address Input</div>
                 <div class="shortcut-pill"><kbd>Esc</kbd> Close Overlay</div>
@@ -758,7 +766,9 @@
     </script>
 
     <script>
-        const GATEWAY = 'wss://wisp.mercurywork.shop';
+        const GATEWAY = (() => {
+            try { return localStorage.getItem('mini:gateway') || 'wss://wisp.mercurywork.shop'; } catch { return 'wss://wisp.mercurywork.shop'; }
+        })();
         const LIBCURL_BASE = 'https://cdn.jsdelivr.net/npm/libcurl.js@latest/';
         const MAX_META_REFRESH = 99;
         const $ = id => document.getElementById(id);
@@ -791,8 +801,30 @@
                 this.iframe.sandbox = "allow-scripts allow-forms allow-popups allow-downloads allow-modals allow-pointer-lock allow-presentation allow-orientation-lock";
                 this.iframe.setAttribute('allow', "fullscreen; autoplay; clipboard-write; encrypted-media; picture-in-picture; gamepad; web-share");
                 $('stage').appendChild(this.iframe);
+                this.iframe.addEventListener('load', () => repaintFrame(this.iframe));
             }
         }
+
+        /* Chromium sometimes leaves a freshly loaded frame unpainted (blank white)
+           until something invalidates it - which is exactly what switching tabs did.
+           Do that invalidation ourselves right after load. */
+        function repaintFrame(f, tries = 3) {
+            if (!f || !f.isConnected) return;
+            const kick = () => {
+                if (!f.isConnected || !f.classList.contains('on')) return;
+                if (document.fullscreenElement || document.pointerLockElement) return;
+                f.style.display = 'none';
+                void f.offsetHeight;
+                f.style.display = '';
+            };
+            kick();
+            requestAnimationFrame(kick);
+            if (tries > 1) setTimeout(() => repaintFrame(f, tries - 1), 350);
+        }
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) { const t = getActiveTab(); if (t) repaintFrame(t.iframe, 1); }
+        });
+        window.addEventListener('focus', () => { const t = getActiveTab(); if (t) repaintFrame(t.iframe, 1); });
 
         function getActiveTab() {
             return tabs.find(t => t.id === activeTabId);
@@ -828,6 +860,7 @@
             updateNavButtons();
             updateProgressLine();
             renderTabs();
+            repaintFrame(activeTab.iframe, 1);
         }
 
         function closeTab(id, event) {
@@ -877,7 +910,7 @@
                 } else {
                     const closeBtn = document.createElement('span');
                     closeBtn.className = 'tab-close';
-                    closeBtn.innerHTML = '&times;';
+                    closeBtn.innerHTML = '×';
                     closeBtn.onclick = (e) => closeTab(tab.id, e);
                     item.appendChild(closeBtn);
                 }
@@ -1147,7 +1180,8 @@
             headers = {},
             body,
             cred = 'include',
-            referer
+            referer,
+            timeout = 0
         } = {}) {
             const h = {
                 'User-Agent': navigator.userAgent,
@@ -1165,15 +1199,96 @@
                 const c = cookieHeader(url);
                 if (c) h['Cookie'] = c;
             }
+            if (!hasHeader(h, 'accept-language')) h['Accept-Language'] = (navigator.language || 'en-US') + ',en;q=0.9';
             const init = {
                 method,
                 headers: h,
                 redirect: 'follow'
             };
             if (body != null && !isGet) init.body = typeof body === 'string' ? body : new Uint8Array(body);
-            const res = await libcurl.fetch(url, init);
-            storeCookies(res, res.url || url);
-            return res;
+            const attempt = async () => {
+                const res = await withTimeout(libcurl.fetch(url, init), timeout, 'Request timed out');
+                storeCookies(res, res.url || url);
+                return res;
+            };
+            try {
+                return await attempt();
+            } catch (err) {
+                // Wisp connections drop now and then; one quiet retry fixes most of it (safe methods only).
+                if (!isGet) throw err;
+                await new Promise(r => setTimeout(r, 400));
+                return await attempt();
+            }
+        }
+
+        function withTimeout(promise, ms, msg) {
+            if (!ms) return promise;
+            return new Promise((resolve, reject) => {
+                const t = setTimeout(() => reject(new Error(msg || 'Timed out')), ms);
+                promise.then(v => { clearTimeout(t); resolve(v); }, e => { clearTimeout(t); reject(e); });
+            });
+        }
+
+        /* Subresource requests from pages go through a small queue so a page that fires
+           dozens of requests at once doesn't overwhelm the Wisp server. */
+        const NET_MAX = 6;
+        let netActive = 0;
+        const netQueue = [];
+        function netSlot() {
+            return new Promise(resolve => {
+                const start = () => {
+                    netActive++;
+                    resolve(() => {
+                        netActive--;
+                        const next = netQueue.shift();
+                        if (next) next();
+                    });
+                };
+                netActive < NET_MAX ? start() : netQueue.push(start);
+            });
+        }
+
+        const STATIC_RE = /\.(?:js|mjs|css|png|jpe?g|gif|webp|avif|svg|ico|woff2?|ttf|otf|wasm|map)(?:$|[?#])/i;
+        const netCache = new Map();
+        const netInflight = new Map();
+        const CACHE_TTL = 60000,
+            CACHE_MAX = 80,
+            CACHE_ITEM_MAX = 2 * 1024 * 1024;
+
+        async function fetchBuffered(url, opts) {
+            const method = (opts.method || 'GET').toUpperCase();
+            const cacheable = method === 'GET' && opts.body == null && STATIC_RE.test(url.split('#')[0]) &&
+                !hasHeader(opts.headers || {}, 'range');
+            const key = cacheable ? url + '|' + (opts.cred === 'omit' ? '' : cookieHeader(url)) : null;
+            const clone = d => ({ ...d, buf: d.buf.slice(0) });
+            if (key) {
+                const hit = netCache.get(key);
+                if (hit && Date.now() - hit.t < CACHE_TTL) return clone(hit.d);
+                const fl = netInflight.get(key);
+                if (fl) return clone(await fl);
+            }
+            const run = (async () => {
+                const release = await netSlot();
+                try {
+                    const res = await fetchRaw(url, { ...opts, timeout: 40000 });
+                    const buf = await withTimeout(res.arrayBuffer(), 60000, 'Response body timed out');
+                    const ct = (res.headers.get('content-type') || '').toLowerCase();
+                    return { res, buf, ct };
+                } finally {
+                    release();
+                }
+            })();
+            if (key) netInflight.set(key, run);
+            try {
+                const d = await run;
+                if (key && d.res.status < 400 && d.buf.byteLength <= CACHE_ITEM_MAX && !/no-store/i.test(d.res.headers.get('cache-control') || '')) {
+                    netCache.set(key, { t: Date.now(), d });
+                    if (netCache.size > CACHE_MAX) netCache.delete(netCache.keys().next().value);
+                }
+                return key ? clone(d) : d;
+            } finally {
+                if (key) netInflight.delete(key);
+            }
         }
         const reply = (src, m, tr = []) => {
             try {
@@ -1187,14 +1302,13 @@
         async function onFetch(d, src) {
             try {
                 if (!/^https?:/i.test(d.url)) throw new Error('Unsupported protocol');
-                const res = await fetchRaw(d.url, {
+                const { res, buf } = await fetchBuffered(d.url, {
                     method: d.method || 'GET',
                     headers: Object.fromEntries(d.headers || []),
                     body: d.body,
                     cred: d.cred,
                     referer: d.page
                 });
-                const buf = await res.arrayBuffer();
                 const headers = [...res.headers.entries()].filter(([k]) => k.toLowerCase() !== 'set-cookie');
                 reply(src, {
                     id: d.id,
@@ -1214,15 +1328,16 @@
         async function onFrame(d, src, hops) {
             try {
                 if (!/^https?:/i.test(d.url)) throw new Error('bad url');
-                const res = await fetchRaw(d.url, {
+                const { res, buf } = await fetchBuffered(d.url, {
                     method: d.method || 'GET',
                     body: d.body,
                     referer: d.referer,
-                    headers: d.contentType ? {
+                    headers: Object.assign({
+                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+                    }, d.contentType ? {
                         'Content-Type': d.contentType
-                    } : {}
+                    } : {})
                 });
-                const buf = await res.arrayBuffer();
                 const ctype = (res.headers.get('content-type') || '').toLowerCase();
                 if (/attachment/i.test(res.headers.get('content-disposition') || '') || (ctype && !/text\/html|application\/xhtml/.test(ctype)))
                     return reply(src, {
@@ -1303,6 +1418,22 @@
                     set: function() {}
                 });
             } catch (e) {}
+
+            if (M.referrer) def(document, 'referrer', {
+                get: function() {
+                    return M.referrer;
+                }
+            });
+            window.addEventListener('load', function() {
+                try {
+                    var h = new URL(BASE).hash;
+                    if (h && h.length > 1) {
+                        var id = decodeURIComponent(h.slice(1));
+                        var el = document.getElementById(id) || document.getElementsByName(id)[0];
+                        if (el && el.scrollIntoView) el.scrollIntoView();
+                    }
+                } catch (e) {}
+            });
 
             var cj = {};
             (M.cookie || '').split('; ').forEach(function(p) {
@@ -2039,7 +2170,7 @@
         }
 
         /* ================= HTML Document Refinement ================= */
-        function buildPage(buf, ctype, finalUrl, depth, canRedirect) {
+        function buildPage(buf, ctype, finalUrl, depth, canRedirect, referrer) {
             let html = decodeBody(buf, ctype);
 
             if (canRedirect) {
@@ -2074,10 +2205,11 @@
                 depth,
                 key,
                 cookie: pageCookies(finalUrl),
-                ls: lsData
+                ls: lsData,
+                referrer: referrer || ''
             };
 
-            const inject = `<base href="${baseHref.replace(/"/g, '&quot;')}">` +
+            const inject = `<base href="${baseHref.replace(/"/g, '"')}">` +
                 '<scr' + 'ipt>(' + MINI_SHIM.toString() + ')(' + safeJson(boot) + ');</scr' + 'ipt>';
             if (/<head(\s[^>]*)?>/i.test(html)) html = html.replace(/<head(\s[^>]*)?>/i, m => m + inject);
             else if (/<html(\s[^>]*)?>/i.test(html)) html = html.replace(/<html(\s[^>]*)?>/i, m => m + '<head>' + inject + '</head>');
@@ -2094,8 +2226,9 @@
                 method = 'GET', body, contentType, push = true, metaDepth = 0, referer
             } = opts;
 
-            if (!ready) {
-                pending = { target, opts };
+            const isHomeTarget = target === 'bubber://home' || target === 'bubber://home/';
+            if (!ready && !isHomeTarget) {
+                pending = { target, opts, tab: targetTab };
                 setStatus('Waiting for Bubber Mini runtime to finish booting…', '', targetTab);
                 return;
             }
@@ -2200,13 +2333,16 @@
             setStatus('Loading ' + target + ' on the bubbernet...', '', targetTab);
 
             try {
-                const headers = {};
+                const headers = {
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8'
+                };
                 if (body != null) headers['Content-Type'] = contentType || 'application/x-www-form-urlencoded';
                 const res = await fetchRaw(target, {
                     method,
                     headers,
                     body,
-                    referer
+                    referer,
+                    timeout: 45000
                 });
                 if (my !== targetTab.token) return;
 
@@ -2226,7 +2362,7 @@
                     }
                 }
 
-                const buf = await res.arrayBuffer();
+                const buf = await withTimeout(res.arrayBuffer(), 90000, 'Response body timed out');
                 if (my !== targetTab.token) return;
 
                 const finishDownload = () => {
@@ -2242,7 +2378,7 @@
                 let page;
                 const isHtml = !ctype || /text\/html|application\/xhtml/.test(ctype);
                 if (isHtml) {
-                    const built = buildPage(buf, ctype, finalUrl, 1, metaDepth < MAX_META_REFRESH);
+                    const built = buildPage(buf, ctype, finalUrl, 1, metaDepth < MAX_META_REFRESH, referer);
                     if (built.redirect) return navigate(built.redirect, {
                         push,
                         metaDepth: metaDepth + 1
@@ -2317,16 +2453,17 @@
             if (targetTab === getActiveTab()) {
                 tabs.forEach(t => t.iframe.classList.remove('on'));
                 targetTab.iframe.classList.add('on');
+                repaintFrame(targetTab.iframe);
             }
         }
 
         function showError(target, err, targetTab) {
             const msg = String(err && err.message || err);
             const esc = s => s.replace(/[&<>"]/g, c => ({
-                '&': '&amp;',
-                '<': '&lt;',
-                '>': '&gt;',
-                '"': '&quot;'
+                '&': '&',
+                '<': '<',
+                '>': '>',
+                '"': '"'
             } [c]));
 
             const errorHtml = `<!DOCTYPE html><meta charset="utf-8"><body style="font-family:'Fredoka',sans-serif;background:#121315;color:#f2f3f5;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;text-align:center">
@@ -2635,7 +2772,7 @@
                 if (pending) {
                     const p = pending;
                     pending = null;
-                    navigate(p.target, p.opts);
+                    navigate(p.target, p.opts, p.tab && tabs.includes(p.tab) ? p.tab : getActiveTab());
                 } else if (init) {
                     navigate(init);
                 }
