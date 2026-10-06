@@ -765,9 +765,23 @@
     </script>
 
     <script>
-        const GATEWAY = (() => {
-            try { return localStorage.getItem('mini:gateway') || 'wss://wisp.mercurywork.shop'; } catch { return 'wss://wisp.mercurywork.shop'; }
+        /* mini:gateway may hold one URL or a comma-separated list; they are tried in order on failure. */
+        const GATEWAYS = (() => {
+            let s = '';
+            try { s = localStorage.getItem('mini:gateway') || ''; } catch {}
+            const l = s.split(',').map(x => x.trim()).filter(Boolean);
+            if (!l.includes('wss://wisp.mercurywork.shop/') && !l.includes('wss://wisp.mercurywork.shop')) l.push('wss://wisp.mercurywork.shop/');
+            return l;
         })();
+        let gwIdx = 0, lastReconn = 0;
+        function reconnectGateway(rotate) {
+            if (rotate) {
+                if (Date.now() - lastReconn < 5000) return; // several requests failing at once -> one reconnect
+                lastReconn = Date.now();
+                gwIdx = (gwIdx + 1) % GATEWAYS.length;
+            }
+            try { libcurl.set_websocket(GATEWAYS[gwIdx]); } catch {}
+        }
         const LIBCURL_BASE = 'https://cdn.jsdelivr.net/npm/libcurl.js@latest/';
         const MAX_META_REFRESH = 99;
         const $ = id => document.getElementById(id);
@@ -1180,43 +1194,75 @@
             body,
             cred = 'include',
             referer,
-            timeout = 0
+            timeout = 0,
+            nav = false
         } = {}) {
-            const h = {
-                'User-Agent': navigator.userAgent,
-                ...headers
-            };
-            if (referer && !hasHeader(h, 'referer')) h['Referer'] = referer;
-            const isGet = /^(GET|HEAD)$/i.test(method);
-            if (referer && !hasHeader(h, 'origin')) {
+            const base = { 'User-Agent': navigator.userAgent, ...headers };
+            if (!hasHeader(base, 'accept-language')) base['Accept-Language'] = (navigator.language || 'en-US') + ',en;q=0.9';
+            const rel = (a, b) => {
                 try {
-                    const o = new URL(referer).origin;
-                    if (!isGet || o !== new URL(url).origin) h['Origin'] = o;
-                } catch {}
-            }
-            if (cred !== 'omit' && !hasHeader(h, 'cookie')) {
-                const c = cookieHeader(url);
-                if (c) h['Cookie'] = c;
-            }
-            if (!hasHeader(h, 'accept-language')) h['Accept-Language'] = (navigator.language || 'en-US') + ',en;q=0.9';
-            const init = {
-                method,
-                headers: h,
-                redirect: 'follow'
+                    const x = new URL(a), y = new URL(b);
+                    if (x.origin === y.origin) return 'same-origin';
+                    const r = h => h.split('.').slice(-2).join('.');
+                    return r(x.hostname) === r(y.hostname) ? 'same-site' : 'cross-site';
+                } catch { return 'none'; }
             };
-            if (body != null && !isGet) init.body = typeof body === 'string' ? body : new Uint8Array(body);
-            const attempt = async () => {
-                const res = await withTimeout(libcurl.fetch(url, init), timeout, 'Request timed out');
-                storeCookies(res, res.url || url);
+            const sleep = ms => new Promise(r => setTimeout(r, ms));
+            let cur = url, m = method, bd = body, hop = 0;
+            for (;;) {
+                const isGet = /^(GET|HEAD)$/i.test(m);
+                const h = { ...base };
+                const site = referer ? rel(referer, cur) : 'none';
+                if (referer && !hasHeader(h, 'referer')) h['Referer'] = referer;
+                if (referer && !hasHeader(h, 'origin')) {
+                    try {
+                        const o = new URL(referer).origin;
+                        if (!isGet || o !== new URL(cur).origin) h['Origin'] = o;
+                    } catch {}
+                }
+                // credentials: 'same-origin' must not leak cookies to other origins
+                const sendCookies = cred === 'include' || (cred !== 'omit' && (site === 'same-origin' || site === 'none'));
+                if (sendCookies && !hasHeader(h, 'cookie')) {
+                    const c = cookieHeader(cur);
+                    if (c) h['Cookie'] = c;
+                }
+                if (!hasHeader(h, 'sec-fetch-mode')) {
+                    h['Sec-Fetch-Mode'] = nav ? 'navigate' : 'cors';
+                    h['Sec-Fetch-Dest'] = nav ? 'document' : 'empty';
+                    h['Sec-Fetch-Site'] = site;
+                    if (nav) { h['Sec-Fetch-User'] = '?1'; h['Upgrade-Insecure-Requests'] = '1'; }
+                }
+                const init = { method: m, headers: h, redirect: 'manual' };
+                if (bd != null && !isGet) init.body = typeof bd === 'string' ? bd : new Uint8Array(bd);
+                let res;
+                for (let a = 0; ; a++) {
+                    try {
+                        res = await withTimeout(libcurl.fetch(cur, init), timeout, 'Request timed out');
+                        break;
+                    } catch (err) {
+                        // Wisp connections drop now and then: retry safe methods, reconnect (and fail over) on the 2nd miss
+                        if (!isGet || a >= 2) throw err;
+                        await sleep(300 * (a + 1));
+                        if (a === 1) reconnectGateway(true);
+                    }
+                }
+                if (cred !== 'omit') storeCookies(res, cur);
+                const loc = res.headers.get('location');
+                if ([301, 302, 303, 307, 308].includes(res.status) && loc && hop < 20) {
+                    const nu = resolveUrl(loc, cur);
+                    if (nu && /^https?:/i.test(nu)) {
+                        if (res.status === 303 || ((res.status === 301 || res.status === 302) && !isGet)) {
+                            if (!/^HEAD$/i.test(m)) m = 'GET';
+                            bd = null;
+                            Object.keys(base).forEach(k => { if (/^content-(type|length)$/i.test(k)) delete base[k]; });
+                        }
+                        cur = nu;
+                        hop++;
+                        continue;
+                    }
+                }
+                if (!res.url) { try { Object.defineProperty(res, 'url', { value: cur }); } catch {} }
                 return res;
-            };
-            try {
-                return await attempt();
-            } catch (err) {
-                // Wisp connections drop now and then; one quiet retry fixes most of it (safe methods only).
-                if (!isGet) throw err;
-                await new Promise(r => setTimeout(r, 400));
-                return await attempt();
             }
         }
 
@@ -1230,7 +1276,7 @@
 
         /* Subresource requests from pages go through a small queue so a page that fires
            dozens of requests at once doesn't overwhelm the Wisp server. */
-        const NET_MAX = 6;
+        const NET_MAX = 12;
         let netActive = 0;
         const netQueue = [];
         function netSlot() {
@@ -1324,6 +1370,36 @@
                 });
             }
         }
+        /* WebSocket bridge: page WebSockets go through libcurl's Wisp-backed WebSocket */
+        const wsBy = new WeakMap();
+        const wsReply = (src, wid, m, tr = []) => { try { src.postMessage({ miniWs: 1, wid, ...m }, '*', tr); } catch {} };
+        function onWsOpen(d, src) {
+            let m = wsBy.get(src);
+            if (!m) { m = new Map(); wsBy.set(src, m); }
+            const fail = () => { wsReply(src, d.wid, { ev: 'error' }); wsReply(src, d.wid, { ev: 'close', code: 1006 }); };
+            if (!/^wss?:/i.test(d.url) || !ready || !libcurl.WebSocket) return fail();
+            let ws;
+            try { ws = new libcurl.WebSocket(d.url, d.protocols || []); } catch { return fail(); }
+            ws.binaryType = 'arraybuffer';
+            m.set(d.wid, ws);
+            ws.onopen = () => wsReply(src, d.wid, { ev: 'open', protocol: ws.protocol || '' });
+            ws.onmessage = ev => { const x = ev.data; wsReply(src, d.wid, { ev: 'message', data: x }, typeof x === 'string' ? [] : [x]); };
+            ws.onerror = () => wsReply(src, d.wid, { ev: 'error' });
+            ws.onclose = ev => { m.delete(d.wid); wsReply(src, d.wid, { ev: 'close', code: ev.code, reason: ev.reason, clean: ev.wasClean }); };
+        }
+        function onWsSend(d, src) {
+            const ws = (wsBy.get(src) || new Map()).get(d.wid);
+            try { if (ws) ws.send(d.data); } catch {}
+        }
+        function onWsClose(d, src) {
+            const ws = (wsBy.get(src) || new Map()).get(d.wid);
+            try { if (ws) ws.close(d.code, d.reason); } catch {}
+        }
+        function closeWsFor(win) {
+            const m = win && wsBy.get(win);
+            if (m) { m.forEach(ws => { try { ws.close(); } catch {} }); m.clear(); }
+        }
+
         async function onFrame(d, src, hops) {
             try {
                 if (!/^https?:/i.test(d.url)) throw new Error('bad url');
@@ -1331,6 +1407,7 @@
                     method: d.method || 'GET',
                     body: d.body,
                     referer: d.referer,
+                    nav: true,
                     headers: Object.assign({
                         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
                     }, d.contentType ? {
@@ -1839,6 +1916,77 @@
                 }
             };
 
+            var wsSeq = 0, wsMap = {};
+            class MiniWS extends EventTarget {
+                constructor(url, protocols) {
+                    super();
+                    var full;
+                    try {
+                        var u = new URL(String(url), BASE);
+                        u.protocol = u.protocol.replace(/^http/, 'ws');
+                        full = u.href;
+                    } catch (e) {
+                        throw new DOMException('Invalid URL', 'SyntaxError');
+                    }
+                    this.url = full;
+                    this.readyState = 0;
+                    this.protocol = '';
+                    this.extensions = '';
+                    this.binaryType = 'blob';
+                    this.bufferedAmount = 0;
+                    this._id = ++wsSeq;
+                    wsMap[this._id] = this;
+                    post({ type: 'wsopen', wid: this._id, url: full, protocols: protocols == null ? [] : [].concat(protocols) });
+                }
+                send(d) {
+                    if (this.readyState !== 1) throw new DOMException('WebSocket is not open', 'InvalidStateError');
+                    var id = this._id;
+                    if (typeof d === 'string') post({ type: 'wssend', wid: id, data: d });
+                    else if (d instanceof Blob) d.arrayBuffer().then(function(b) { post({ type: 'wssend', wid: id, data: b }, [b]); });
+                    else {
+                        var b = ArrayBuffer.isView(d) ? d.buffer.slice(d.byteOffset, d.byteOffset + d.byteLength) : d.slice(0);
+                        post({ type: 'wssend', wid: id, data: b }, [b]);
+                    }
+                }
+                close(code, reason) {
+                    if (this.readyState >= 2) return;
+                    this.readyState = 2;
+                    post({ type: 'wsclose', wid: this._id, code: code, reason: reason });
+                }
+                _ev(type, init) {
+                    var ev;
+                    try {
+                        ev = type === 'message' ? new MessageEvent('message', init) : type === 'close' ? new CloseEvent('close', init) : new Event(type);
+                    } catch (e) { ev = new Event(type); }
+                    this.dispatchEvent(ev);
+                    var h = this['on' + type];
+                    if (typeof h === 'function') { try { h.call(this, ev); } catch (e) { setTimeout(function() { throw e; }); } }
+                }
+            }
+            ['CONNECTING', 'OPEN', 'CLOSING', 'CLOSED'].forEach(function(n, i) {
+                def(MiniWS, n, { value: i });
+                def(MiniWS.prototype, n, { value: i });
+            });
+            window.WebSocket = MiniWS;
+            window.addEventListener('message', function(e) {
+                var d = e.data;
+                if (!d || !d.miniWs || e.source !== T) return;
+                var w = wsMap[d.wid];
+                if (!w) return;
+                if (d.ev === 'open') { w.readyState = 1; w.protocol = d.protocol || ''; w._ev('open'); }
+                else if (d.ev === 'message') {
+                    var data = d.data;
+                    if (typeof data !== 'string' && w.binaryType !== 'arraybuffer') data = new Blob([data]);
+                    var org = ''; try { org = new URL(w.url).origin.replace(/^ws/, 'http'); } catch (x) {}
+                    w._ev('message', { data: data, origin: org });
+                } else if (d.ev === 'error') w._ev('error');
+                else if (d.ev === 'close') {
+                    w.readyState = 3;
+                    delete wsMap[w._id];
+                    w._ev('close', { code: d.code || 1006, reason: d.reason || '', wasClean: !!d.clean });
+                }
+            });
+
             function go(url, extra) {
                 if (!url) return;
                 if (isSub) {
@@ -2341,6 +2489,7 @@
                     headers,
                     body,
                     referer,
+                    nav: true,
                     timeout: 45000
                 });
                 if (my !== targetTab.token) return;
@@ -2436,6 +2585,7 @@
         }
 
         function showPage(page, targetTab) {
+            try { closeWsFor(targetTab.iframe.contentWindow); } catch {}
             if (targetTab.blobUrl) {
                 URL.revokeObjectURL(targetTab.blobUrl);
                 targetTab.blobUrl = null;
@@ -2664,6 +2814,15 @@
                 case 'frame':
                     onFrame(d, e.source, hops);
                     break;
+                case 'wsopen':
+                    onWsOpen(d, e.source);
+                    break;
+                case 'wssend':
+                    onWsSend(d, e.source);
+                    break;
+                case 'wsclose':
+                    onWsClose(d, e.source);
+                    break;
                 case 'cookie':
                     if (pg && typeof d.str === 'string') setCookieStr(d.str, pg.url, true);
                     break;
@@ -2761,7 +2920,7 @@
                 }
                 
                 await loadLibcurl();
-                libcurl.set_websocket(GATEWAY);
+                reconnectGateway(false);
                 ready = true;
                 goBtn.disabled = false;
                 goBtn.textContent = 'Graggle Search';
