@@ -1,0 +1,3039 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Warp</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%237b5cff'/%3E%3Ctext x='16' y='22' font-size='15' text-anchor='middle' fill='%230a0620' font-family='sans-serif' font-weight='bold'%3EW%3C/text%3E%3C/svg%3E">
+<style>
+/* ============================================================================
+   WARP PROXY — shell styles
+   Single document, single viewport, no tabs.
+   ========================================================================= */
+:root{
+  /* ---- void ---- */
+  --bg:#04050e; --bg2:#080b1a; --panel:#0e1228; --panel2:#171c3a;
+  --line:#232b58; --line2:#36407c;
+
+  /* ---- ink ---- */
+  --text:#e9ecff; --muted:#98a2d6; --dim:#5e6797;
+
+  /* ---- nebula ---- */
+  --accent:#7b5cff; --accent2:#a48bff; --accentink:#0a0620;
+  --purple:#c084fc; --cyan:#4dd0e1;
+  --accent-rgb:123,92,255;
+  --glow-a:123,92,255;
+  --glow-b:88,166,255;
+
+  /* ---- signals ---- */
+  --err:#fb7185; --warn:#fbbf24; --info:#58a6ff;
+
+  --radius:10px; --radius-lg:16px;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,sans-serif;
+  --shadow:0 16px 50px rgba(0,0,0,.7),0 0 0 1px rgba(123,92,255,.06);
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);
+  -webkit-font-smoothing:antialiased;overflow:hidden}
+button,input,select,textarea{font-family:inherit;color:inherit}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:#2c3category;background:#2c3856;border-radius:6px;border:2px solid transparent;background-clip:content-box}
+::-webkit-scrollbar-thumb:hover{background:#3c4a70;background-clip:content-box}
+
+/* ---------------------------------------------------------------- stage --- */
+#stage{position:fixed;top:var(--chrome,44px);left:0;right:0;bottom:0;background:#fff}#view{position:absolute;inset:0;width:100%;height:100%;border:0;background:#fff;display:none}
+#view.on{display:block}
+#stage.shrink #view{bottom:0}
+body.devtools #view{right:var(--devw,420px)}
+
+/* -------------------------------------------------------------- toolbar --- */
+#toolbar{
+  position:fixed;top:0;left:0;right:0;height:44px;z-index:40;
+  display:flex;align-items:center;gap:6px;padding:0 8px;
+  background:linear-gradient(180deg,rgba(11,16,32,.98),rgba(11,16,32,.92));
+  border-bottom:1px solid var(--line);
+  transform:translateY(-46px);transition:transform .18s ease, right .18s ease;
+  backdrop-filter:blur(10px);
+}
+body.devtools #toolbar{right:var(--devw,420px)}
+#toolbar.show{transform:translateY(0)}
+.tb-btn{
+  flex:0 0 auto;width:32px;height:32px;display:grid;place-items:center;
+  border:1px solid transparent;border-radius:8px;background:transparent;
+  color:var(--muted);cursor:pointer;font-size:15px;line-height:1;user-select:none;
+}
+.tb-btn:hover{background:var(--panel2);color:var(--text);border-color:var(--line)}
+.tb-btn:active{transform:scale(.94)}
+.tb-btn[disabled]{opacity:.32;cursor:default;transform:none}
+.tb-btn.accent{color:var(--accent)}
+.tb-sep{width:1px;height:20px;background:var(--line);margin:0 2px;flex:0 0 auto}
+
+#omni{
+  flex:1 1 auto;min-width:60px;height:32px;display:flex;align-items:center;
+  background:var(--panel);border:1px solid var(--line);border-radius:16px;
+  padding:0 4px 0 10px;transition:border-color .15s,box-shadow .15s;
+}
+#omni:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px rgba(var(--accent-rgb),.22)}
+#scheme{font-size:11px;color:var(--dim);margin-right:6px;font-family:var(--mono);flex:0 0 auto}
+#omni input{
+  flex:1 1 auto;min-width:0;height:100%;border:0;background:transparent;outline:0;
+  font-size:13.5px;font-family:var(--mono);letter-spacing:-.1px;
+}
+#omni input::placeholder{color:var(--dim);font-family:var(--sans)}
+#secure{flex:0 0 auto;font-size:11px;padding:0 6px;color:var(--accent)}
+#secure.warn{color:var(--warn)}
+#secure.bad{color:var(--err)}
+#goBtn{
+  flex:0 0 auto;height:24px;padding:0 10px;margin-left:4px;border:0;border-radius:12px;
+  background:var(--accent);color:var(--accentink);font-weight:700;font-size:11.5px;cursor:pointer;
+}
+#goBtn:hover{background:var(--accent2)}
+
+/* ---------------------------------------------------------- progressbar --- */
+#progress{position:fixed;top:44px;left:0;right:0;height:2px;z-index:45;pointer-events:none;opacity:0;transition:opacity .2s}
+body.devtools #progress{right:var(--devw,420px)}
+#progress.on{opacity:1;background:linear-gradient(90deg,transparent,var(--accent),var(--purple),transparent);
+  background-size:45% 100%;background-repeat:no-repeat;animation:slide 1.05s linear infinite}
+@keyframes slide{from{background-position:-45% 0}to{background-position:145% 0}}
+
+/* --------------------------------------------------------------- toast --- */
+#toast{
+  position:fixed;left:12px;bottom:12px;z-index:60;max-width:min(560px,calc(100% - 24px));
+  padding:8px 14px;border-radius:var(--radius);background:rgba(15,23,42,.96);
+  border:1px solid var(--line);box-shadow:var(--shadow);font-size:12.5px;color:var(--text);
+  pointer-events:none;opacity:0;transform:translateY(8px);transition:opacity .18s,transform .18s;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+#toast.show{opacity:1;transform:translateY(0)}
+#toast.err{border-color:rgba(248,113,113,.5);color:#fecaca}
+#toast.ok{border-color:rgba(var(--accent-rgb),.5);color:#cfc4ff}
+#toast.info{border-color:rgba(96,165,250,.5);color:#bfdbfe}
+
+/* ---------------------------------------------------------------- home --- */
+#home{
+  position:fixed;inset:0;z-index:30;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:0;padding:24px;text-align:center;overflow:auto;
+  background:
+    radial-gradient(900px 480px at 50% -10%,rgba(var(--glow-a),.16),transparent 60%),
+    radial-gradient(700px 400px at 85% 110%,rgba(var(--glow-b),.13),transparent 60%),
+    var(--bg);
+}
+#home.hidden{display:none}
+#brand{font-size:clamp(34px,7vw,58px);font-weight:800;letter-spacing:-.03em;margin:0;
+  background:linear-gradient(120deg,var(--cyan),var(--accent) 45%,var(--purple));
+  -webkit-background-clip:text;background-clip:text;color:transparent}
+#tagline{color:var(--muted);margin:6px 0 0;font-size:14px}
+#homeForm{display:flex;gap:8px;width:100%;max-width:620px;margin-top:26px}
+#homeInput{
+  flex:1;min-width:0;height:52px;padding:0 20px;border-radius:26px;
+  border:1px solid var(--line);background:var(--panel);font-size:16px;outline:0;
+  transition:border-color .15s,box-shadow .15s;
+}
+#homeInput:focus{border-color:var(--accent);box-shadow:0 0 0 4px rgba(var(--accent-rgb),.20)}
+#homeGo{height:52px;padding:0 26px;border:0;border-radius:26px;background:var(--accent);
+  color:var(--accentink);font-weight:700;font-size:15px;cursor:pointer}
+#homeGo:hover{background:var(--accent2)}
+#homeGo:disabled{opacity:.5;cursor:default}
+#statusMsg{margin-top:16px;font-size:12.5px;color:var(--muted);min-height:18px;
+  max-width:620px;word-break:break-word}
+#statusMsg.ok{color:var(--accent)}
+#statusMsg.err{color:var(--err)}
+
+#quick{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:34px;max-width:680px}
+.qchip{
+  display:flex;flex-direction:column;align-items:center;gap:7px;width:78px;padding:12px 6px;
+  border-radius:var(--radius-lg);border:1px solid transparent;cursor:pointer;user-select:none;
+  background:transparent;transition:.15s;
+}
+.qchip:hover{background:var(--panel);border-color:var(--line)}
+.qico{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;
+  background:var(--panel2);font-size:18px;font-weight:700;color:var(--accent);
+  border:1px solid var(--line);overflow:hidden}
+.qico img{width:100%;height:100%;object-fit:cover}
+.qname{font-size:11px;color:var(--muted);max-width:72px;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+#hint{margin-top:30px;font-size:11.5px;color:var(--dim);line-height:1.9}
+kbd{font-family:var(--mono);font-size:10.5px;background:var(--panel2);border:1px solid var(--line);
+  border-bottom-width:2px;border-radius:5px;padding:1px 5px;color:var(--muted)}
+#homeTop{position:absolute;top:14px;right:16px;display:flex;gap:6px}
+
+/* --------------------------------------------------------------- panel --- */
+#devtools{
+  position:fixed;top:0;right:0;bottom:0;width:var(--devw,420px);z-index:50;
+  background:var(--bg2);border-left:1px solid var(--line);display:none;flex-direction:column;
+  box-shadow:-16px 0 40px rgba(0,0,0,.4);
+}
+body.devtools #devtools{display:flex}
+#devtools header{display:flex;align-items:center;gap:4px;padding:8px 8px;border-bottom:1px solid var(--line);flex:0 0 auto}
+#devtools header .t{font-size:12px;font-weight:700;letter-spacing:.08em;color:var(--muted);text-transform:uppercase;margin-right:auto;padding-left:6px}
+.devtab{
+  border:0;background:transparent;color:var(--dim);font-size:11.5px;padding:5px 9px;border-radius:7px;
+  cursor:pointer;font-weight:600;
+}
+.devtab:hover{background:var(--panel2);color:var(--text)}
+.devtab.active{background:var(--panel2);color:var(--accent)}
+#devbody{flex:1 1 auto;overflow:auto;padding:0}
+.dewpane{display:none;padding:10px}
+.dewpane.active{display:block}
+.devtool{display:flex;gap:6px;padding:6px 8px;border-bottom:1px solid var(--line);flex:0 0 auto;flex-wrap:wrap}
+.warp{
+  border:1px solid var(--line);background:var(--panel);color:var(--muted);font-size:11px;
+  padding:4px 9px;border-radius:6px;cursor:pointer;
+}
+.warp:hover{background:var(--panel2);color:var(--text)}
+.warp.danger:hover{border-color:var(--err);color:var(--err)}
+.warp.on{border-color:var(--accent);color:var(--accent)}
+
+.row{display:flex;gap:8px;align-items:center;padding:5px 6px;border-radius:6px;font-size:12px;
+  font-family:var(--mono);border-bottom:1px solid rgba(40,50,77,.5)}
+.row:hover{background:var(--panel)}
+.row .k{color:var(--dim);flex:0 0 auto;min-width:52px}
+.row .v{color:var(--text);word-break:break-all;flex:1 1 auto}
+.row.sel{background:var(--panel2)}
+.mth{font-weight:700;font-size:10.5px;padding:1px 5px;border-radius:4px;background:var(--panel2);flex:0 0 auto}
+.mth.GET{color:var(--accent)} .mth.POST{color:var(--warn)} .mth.PUT,.mth.PATCH{color:var(--info)}
+.mth.DELETE{color:var(--err)}
+.st{font-size:11px;flex:0 0 auto;color:var(--muted)}
+.st.ok{color:var(--accent)} .st.redir{color:var(--info)} .st.err{color:var(--err)}
+.neturl{flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);font-size:11.5px}
+.msz{font-size:10.5px;color:var(--dim);flex:0 0 auto}
+
+.log{font-family:var(--mono);font-size:11.5px;padding:4px 6px;border-bottom:1px solid rgba(40,50,77,.45);
+  white-space:pre-wrap;word-break:break-word;line-height:1.45}
+.log.err{color:#fca5a5} .log.warn{color:#fcd34d} .log.info{color:#93c5fd} .log.debug{color:var(--dim)}
+.log .src{color:var(--dim);font-size:10px;display:block;margin-top:2px}
+
+label.opt{display:flex;align-items:center;gap:9px;padding:8px 6px;font-size:12.5px;
+  border-bottom:1px solid rgba(40,50,77,.5);cursor:pointer}
+label.opt .lbl{flex:1 1 auto}
+label.opt .sub{font-size:10.5px;color:var(--dim);display:block}
+label.opt input[type=checkbox]{width:16px;height:16px;accent-color:var(--accent);cursor:pointer}
+label.opt input[type=text],label.opt select{
+  flex:1 1 60px;max-width:200px;height:26px;background:var(--panel);border:1px solid var(--line);
+  border-radius:6px;padding:0 8px;font-size:11.5px;font-family:var(--mono);outline:0;
+}
+h4.sec{margin:14px 6px 6px;font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--dim)}
+.kv{display:flex;gap:8px;font-size:11.5px;font-family:var(--mono);padding:4px 6px;border-bottom:1px solid rgba(40,50,77,.4)}
+.kv .kk{color:var(--dim);flex:0 0 42%;word-break:break-all}
+.kv .vv{color:var(--text);flex:1 1 auto;word-break:break-all}
+
+/* ------------------------------------------------------------- findbar --- */
+#findbar{
+  position:fixed;top:52px;right:18px;z-index:55;display:none;align-items:center;gap:6px;
+  background:var(--panel);border:1px solid var(--line2);border-radius:10px;padding:6px 8px;
+  box-shadow:var(--shadow);
+}
+body.devtools #findbar{right:calc(var(--devw,420px) + 18px)}
+#findbar.show{display:flex}
+#findbar input{height:28px;width:190px;background:var(--bg);border:1px solid var(--line);
+  border-radius:7px;padding:0 10px;font-size:13px;outline:0}
+#findbar input:focus{border-color:var(--accent)}
+#findcount{font-size:11px;color:var(--muted);min-width:52px;text-align:center;font-family:var(--mono)}
+
+/* ---------------------------------------------------------- contextmenu --- */
+#ctx{
+  position:fixed;z-index:70;display:none;min-width:196px;padding:5px;
+  background:var(--panel);border:1px solid var(--line2);border-radius:10px;box-shadow:var(--shadow);
+  font-size:12.5px;
+}
+#ctx.show{display:block}
+#ctx .ci{padding:6px 10px;border-radius:6px;cursor:pointer;color:var(--text);white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;max-width:280px}
+#ctx .ci:hover{background:var(--panel2)}
+#ctx .ci.dim{color:var(--dim)}
+#ctx .csep{height:1px;background:var(--line);margin:4px 6px}
+
+/* ------------------------------------------------------------- overlay --- */
+#sheet{
+  position:fixed;inset:0;z-index:80;background:rgba(6,10,22,.7);backdrop-filter:blur(4px);
+  display:none;align-items:center;justify-content:center;padding:24px;
+}
+#sheet.show{display:flex}
+#sheetCard{width:min(760px,100%);max-height:84vh;display:flex;flex-direction:column;
+  background:var(--bg2);border:1px solid var(--line);border-radius:var(--radius-lg);box-shadow:var(--shadow);overflow:hidden}
+#sheetCard header{display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid var(--line)}
+#sheetCard header .t{font-weight:700;font-size:14px;margin-right:auto}
+#sheetBody{padding:14px;overflow:auto}
+#sheetBody pre{font-family:var(--mono);font-size:11.5px;white-space:pre-wrap;word-break:break-word;
+  background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:12px;margin:0;
+  max-height:56vh;overflow:auto;line-height:1.5}
+.hlist{display:flex;flex-direction:column;gap:2px}
+.hitem{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;cursor:pointer;font-size:13px}
+.hitem:hover{background:var(--panel)}
+.hitem .hu{flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);font-family:var(--mono);font-size:11.5px}
+.hitem .ht{font-weight:600;flex:0 0 auto;max-width:44%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hitem .hd{color:var(--dim);font-size:10.5px;flex:0 0 auto}
+.empty{color:var(--dim);font-size:13px;text-align:center;padding:30px 10px}
+
+/* ---------------------------------------------------------- errorpage ---- */
+#errpage{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;
+  justify-content:center;background:var(--bg);z-index:5;text-align:center;padding:30px}
+#errpage.show{display:flex}
+#errpage .big{font-size:44px;font-weight:800;color:var(--line2);letter-spacing:-.04em}
+#errpage h2{margin:14px 0 6px;font-size:19px}
+#errpage .u{color:var(--muted);font-family:var(--mono);font-size:12px;word-break:break-all;max-width:560px}
+#errpage .m{color:var(--err);font-size:12.5px;margin-top:10px;font-family:var(--mono);max-width:560px;word-break:break-all}
+#errpage .actions{margin-top:20px;display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+.btn{border:1px solid var(--line2);background:var(--panel);color:var(--text);padding:9px 16px;
+  border-radius:9px;font-size:13px;cursor:pointer;font-weight:600}
+.btn:hover{background:var(--panel2);border-color:var(--accent)}
+.btn.primary{background:var(--accent);color:var(--accentink);border-color:transparent}
+.btn.primary:hover{background:var(--accent2)}
+
+/* ------------------------------------------------------------ spinners --- */
+.spin{width:13px;height:13px;border:2px solid rgba(255,255,255,.2);border-top-color:var(--accent);
+  border-radius:50%;animation:spin .7s linear infinite;display:inline-block;vertical-align:-2px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.badge{display:inline-block;font-size:10px;font-weight:700;padding:1px 6px;border-radius:99px;
+  background:var(--panel2);color:var(--muted);border:1px solid var(--line);vertical-align:1px}
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+
+<!-- ============================== STAGE ============================== -->
+<div id="stage">
+  <iframe id="view"
+    sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-downloads allow-modals allow-pointer-lock allow-presentation allow-top-navigation-by-user-activation"
+    allow="clipboard-read; clipboard-write; camera; microphone; geolocation; fullscreen; autoplay; encrypted-media; picture-in-picture; payment; midi"
+    referrerpolicy="no-referrer"></iframe>
+
+  <div id="errpage">
+    <div class="big">:(</div>
+    <h2 id="errTitle">Can't reach this page</h2>
+    <div class="u" id="errUrl"></div>
+    <div class="m" id="errMsg"></div>
+    <div class="actions">
+      <button class="btn primary" id="errRetry">Retry</button>
+      <button class="btn" id="errHome">Home</button>
+      <button class="btn" id="errInfo">Details</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================== TOOLBAR ============================= -->
+<div id="toolbar">
+  <button class="tb-btn" id="tbBack"    title="Back (Alt+Left)">&#8592;</button>
+  <button class="tb-btn" id="tbFwd"     title="Forward (Alt+Right)">&#8594;</button>
+  <button class="tb-btn" id="tbReload"  title="Reload (Alt+R)">&#8635;</button>
+  <button class="tb-btn" id="tbHome"    title="Home (Alt+Home)">&#8962;</button>
+  <div class="tb-sep"></div>
+  <div id="omni">
+    <span id="scheme">https://</span>
+    <span id="secure" title="Connection">&#9679;</span>
+    <input id="omniInput" spellcheck="false" autocapitalize="off" autocorrect="off" placeholder="Search or enter address">
+    <button id="goBtn">Go</button>
+  </div>
+  <div class="tb-sep"></div>
+  <button class="tb-btn" id="tbStar"    title="Bookmark (Ctrl+D)">&#9734;</button>
+  <button class="tb-btn" id="tbFind"    title="Find in page (Ctrl+F)">&#9906;</button>
+  <button class="tb-btn" id="tbZoom"    title="Reset zoom" style="width:auto;padding:0 7px;font-size:11.5px;font-family:var(--mono)">100%</button>
+  <button class="tb-btn" id="tbMenu"    title="Menu">&#9776;</button>
+  <button class="tb-btn accent" id="tbDev" title="DevTools (F12)">&#9635;</button>
+</div>
+
+<!-- ============================== HOME =============================== -->
+<div id="home">
+  <div id="homeTop">
+    <button class="tb-btn" id="homeHist" title="History">&#9201;</button>
+    <button class="tb-btn" id="homeBook" title="Bookmarks">&#9733;</button>
+    <button class="tb-btn" id="homeDl"   title="Downloads">&#8681;</button>
+    <button class="tb-btn accent" id="homeDev" title="DevTools">&#9635;</button>
+  </div>
+  <h1 id="brand">Warp</h1>
+  <p id="tagline">a single-file, no-tabs proxy. [Built by BGS Labs]</p>
+  <form id="homeForm" autocomplete="off">
+    <input id="homeInput" placeholder="Search or enter address" spellcheck="false" autocapitalize="off">
+    <button id="homeGo" type="submit" disabled>Boot</button>
+  </form>
+  <div id="statusMsg">Initializing WASM runtime…</div>
+  <div id="quick"></div>
+  <div id="hint">
+    <kbd>Alt</kbd>+<kbd>&#8592;</kbd> back &nbsp;·&nbsp; <kbd>Alt</kbd>+<kbd>&#8594;</kbd> forward &nbsp;·&nbsp;
+    <kbd>Alt</kbd>+<kbd>R</kbd> reload &nbsp;·&nbsp; <kbd>Ctrl</kbd>+<kbd>L</kbd> address &nbsp;·&nbsp;
+    <kbd>Ctrl</kbd>+<kbd>F</kbd> find &nbsp;·&nbsp; <kbd>F12</kbd> devtools
+  </div>
+</div>
+
+<div id="progress"></div>
+<div id="toast"></div>
+
+<!-- ============================== FINDBAR ============================ -->
+<div id="findbar">
+  <input id="findInput" placeholder="Find in page…" spellcheck="false">
+  <span id="findcount"></span>
+  <button class="warp" id="findPrev" title="Previous">&#8593;</button>
+  <button class="warp" id="findNext" title="Next">&#8595;</button>
+  <button class="warp" id="findCase" title="Match case">Aa</button>
+  <button class="warp" id="findClose">&#10005;</button>
+</div>
+
+<!-- ============================ CONTEXT MENU ========================= -->
+<div id="ctx"></div>
+
+<!-- ============================== DEVTOOLS =========================== -->
+<aside id="devtools">
+  <header>
+    <span class="t">DevTools</span>
+    <button class="devtab active" data-pane="net">Net</button>
+    <button class="devtab" data-pane="console">Console</button>
+    <button class="devtab" data-pane="storage">Storage</button>
+    <button class="devtab" data-pane="info">Info</button>
+    <button class="devtab" data-pane="settings">Settings</button>
+    <button class="tb-btn" id="devClose" title="Close">&#10005;</button>
+  </header>
+  <div class="devtool">
+    <button class="warp" id="devClear">Clear</button>
+    <button class="warp" id="devPersist">Persist</button>
+    <span style="flex:1"></span>
+    <span class="badge" id="netCount">0</span>
+  </div>
+  <div id="devbody">
+    <div class="dewpane active" id="pane-net"></div>
+    <div class="dewpane" id="pane-console"></div>
+    <div class="dewpane" id="pane-storage"></div>
+    <div class="dewpane" id="pane-info"></div>
+    <div class="dewpane" id="pane-settings"></div>
+  </div>
+</aside>
+
+<!-- ============================== SHEET ============================== -->
+<div id="sheet">
+  <div id="sheetCard">
+    <header>
+      <span class="t" id="sheetTitle">Panel</span>
+      <button class="warp" id="sheetClose">&#10005;</button>
+    </header>
+    <div id="sheetBody"></div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/libcurl.js@latest/libcurl_full.js"></script>
+<script>
+/* ============================================================================
+ *  WARP PROXY — parent runtime
+ *  A no-tabs, single-view proxy. Every resource of every page flows through
+ *  this runtime; the injected agent inside each frame talks back over a
+ *  token-tagged postMessage bridge.
+ * ========================================================================== */
+'use strict';
+
+/* --------------------------------------------------------------- config -- */
+const TAG = '__wp__';
+const LIBCURL_BASE = 'https://cdn.jsdelivr.net/npm/libcurl.js@latest/';
+const BUILD = 'warp-proxy/3.1.0';
+
+const GATEWAYS = [
+  'wss://wisp.mercurywork.shop/',
+  'wss://wisp.mercurywork.shop',
+];
+
+const DEFAULTS = {
+  gateway: GATEWAYS[0],
+  inlineCss: true,
+  inlineJs: true,
+  inlineFrames: true,
+  cache: true,
+  images: true,
+  javaScript: true,
+  spoofUA: '',
+  sendReferer: true,
+  persistCookies: true,
+  persistStorage: true,
+  stripCsp: true,
+  unblockMedia: true,
+  searchEngine: 'https://search.brave.com/search?q=%s',
+  concurrency: 8,
+  timeout: 22000,
+  retries: 2,
+  maxRedirects: 12,
+  metaRefreshDepth: 6,
+  frameDepth: 2,
+  maxInlineBytes: 2200000,
+};
+
+const QUICK_LINKS = [
+  { 
+    name: 'Google', 
+    url: 'https://www.google.com/', 
+    ico: 'G' 
+  },
+  { 
+    name: 'YouTube', 
+    url: 'https://m.youtube.com/', 
+    ico: '📺' 
+  },
+  { 
+    name: 'Wikipedia', 
+    url: 'https://en.m.wikipedia.org/', 
+    ico: '🌐' 
+  },
+  { 
+    name: 'GitHub', 
+    url: 'https://github.com/', 
+    ico: '🧑‍💻' 
+  },
+];
+
+/* ------------------------------------------------------------------ dom -- */
+const $ = id => document.getElementById(id);
+const view = $('view');
+const home = $('home');
+const toolbar = $('toolbar');
+const progress = $('progress');
+const toastEl = $('toast');
+const omniInput = $('omniInput');
+const homeInput = $('homeInput');
+const schemeEl = $('scheme');
+const secureEl = $('secure');
+const statusEl = $('statusMsg');
+const errpage = $('errpage');
+const devtools = $('devtools');
+
+/* ---------------------------------------------------------------- state -- */
+const state = {
+  ready: false,
+  http: null,
+  gateway: null,
+  token: Math.random().toString(36).slice(2) + Date.now().toString(36),
+  pendingBoot: null,
+  history: [],
+  hIndex: -1,
+  navToken: 0,
+  loading: false,
+  blobUrl: null,
+  zoom: 1,
+  lastRawHtml: '',
+  lastDoc: null,
+  currentMeta: null,
+  toastTimer: null,
+  findOpen: false,
+  findCase: false,
+  downloads: [],
+  netLog: [],
+  netPaused: false,
+  lastError: null,
+  bootTime: Date.now(),
+};
+
+const settings = loadJSON('wp.settings', DEFAULTS);
+
+/* ------------------------------------------------------------- utilities - */
+function loadJSON(key, fallback) {
+  try { const v = JSON.parse(localStorage.getItem(key)); return v == null ? fallback : Object.assign({}, fallback, v); }
+  catch { return fallback; }
+}
+function saveJSON(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); } catch {} }
+function saveSettings() { saveJSON('wp.settings', settings); }
+
+function toast(msg, kind = '') {
+  clearTimeout(state.toastTimer);
+  toastEl.textContent = msg;
+  toastEl.className = 'show ' + kind;
+  if (kind !== 'err' || !state.loading) {
+    state.toastTimer = setTimeout(() => toastEl.classList.remove('show'), kind === 'err' ? 6000 : 3200);
+  }
+}
+function setStatus(msg, kind = '') {
+  statusEl.textContent = msg || '';
+  statusEl.className = kind;
+  if (msg && home.classList.contains('hidden')) toast(msg, kind);
+}
+function setLoading(on) {
+  state.loading = on;
+  progress.classList.toggle('on', on);
+}
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function hostOf(u) { try { return new URL(u).host; } catch { return u || ''; } }
+function originOf(u) { try { return new URL(u).origin; } catch { return ''; } }
+function resolveUrl(href, base) { try { return new URL(href, base).href; } catch { return null; } }
+function isHttp(u) { return /^https?:/i.test(u || ''); }
+function shortUrl(u, n = 70) { u = String(u || ''); return u.length > n ? u.slice(0, n - 1) + '…' : u; }
+
+/* ------------------------------------------------ content-type helpers --- */
+function isHtmlType(ct) { return !ct || /text\/html|application\/xhtml\+xml/i.test(ct); }
+function isTextual(ct) { return /^text\/|json|xml|javascript|ecmascript|x-sh|svg/i.test(ct || ''); }
+function isBinaryView(ct) { return /^(image|video|audio)\//.test(ct || '') || /application\/(pdf|octet-stream)/.test(ct || ''); }
+
+function decodeBody(buf, contentType) {
+  let charset = (/charset=["']?([\w-]+)/i.exec(contentType || '') || [])[1];
+  if (!charset) {
+    const head = new TextDecoder('latin1').decode(buf.slice(0, 4096));
+    charset = (/<meta[^>]+charset=["']?\s*([\w-]+)/i.exec(head) || [])[1];
+  }
+  if (charset && !/^utf-?8$/i.test(charset)) {
+    try { return new TextDecoder(charset).decode(buf); } catch {}
+  }
+  return new TextDecoder('utf-8').decode(buf);
+}
+function decodeEntities(s) {
+  const t = document.createElement('textarea');
+  t.innerHTML = s;
+  return t.value;
+}
+function filenameFrom(disp, url) {
+  const m = /filename\*?=(?:UTF-8'')?["']?([^"';]+)/i.exec(disp || '');
+  if (m) { try { return decodeURIComponent(m[1]); } catch { return m[1]; } }
+  try {
+    const p = new URL(url).pathname.split('/').filter(Boolean).pop() || 'download';
+    return decodeURIComponent(p);
+  } catch { return 'download'; }
+}
+function saveBlob(blob, name) {
+  const u = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = u; a.download = name || 'download';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(u), 20000);
+  state.downloads.unshift({ name, size: blob.size, url: u, at: Date.now() });
+  if (state.downloads.length > 200) state.downloads.pop();
+}
+
+/* ------------------------------------------------------------- cookie jar */
+const cookieJar = {
+  map: new Map(),  // host -> Map(name -> {v, path, exp, secure, httpOnly, sameSite})
+
+  _domain(url) { try { return new URL(url).hostname; } catch { return ''; } },
+
+  _bucket(host, create) {
+    if (!this.map.has(host)) { if (!create) return null; this.map.set(host, new Map()); }
+    return this.map.get(host);
+  },
+
+  // Return "a=1; b=2" for a URL, honouring domain/path/secure/expiry.
+  header(url) {
+    let u; try { u = new URL(url); } catch { return ''; }
+    const out = [];
+    const now = Date.now();
+    for (const [host, bucket] of this.map) {
+      const hostMatch = u.hostname === host || u.hostname.endsWith('.' + host);
+      if (!hostMatch) continue;
+      for (const [name, c] of bucket) {
+        if (c.exp && c.exp < now) { bucket.delete(name); continue; }
+        if (c.secure && u.protocol !== 'https:') continue;
+        if (c.path && c.path !== '/' && !u.pathname.startsWith(c.path)) continue;
+        out.push(name + '=' + c.v);
+      }
+    }
+    return out.join('; ');
+  },
+
+  // Parse a Set-Cookie string (or several) into the jar.
+  set(url, headerValue) {
+    if (!headerValue) return;
+    let u; try { u = new URL(url); } catch { return; }
+    const parts = splitSetCookie(headerValue);
+    for (const raw of parts) {
+      const bits = raw.split(';');
+      const first = bits.shift() || '';
+      const eq = first.indexOf('=');
+      if (eq < 1) continue;
+      const name = first.slice(0, eq).trim();
+      const value = first.slice(eq + 1).trim();
+      const c = { v: value, path: u.pathname.replace(/[^/]*$/, '') || '/', exp: 0, secure: false, httpOnly: false };
+      let domain = u.hostname;
+      for (const b of bits) {
+        const i = b.indexOf('=');
+        const k = (i < 0 ? b : b.slice(0, i)).trim().toLowerCase();
+        const val = i < 0 ? '' : b.slice(i + 1).trim();
+        if (k === 'domain') domain = val.replace(/^\./, '');
+        else if (k === 'path') c.path = val || '/';
+        else if (k === 'secure') c.secure = true;
+        else if (k === 'httponly') c.httpOnly = true;
+        else if (k === 'max-age') { const s = parseInt(val, 10); if (!isNaN(s)) c.exp = Date.now() + s * 1000; }
+        else if (k === 'expires') { const d = Date.parse(val); if (!isNaN(d)) c.exp = d; }
+      }
+      if (c.exp && c.exp < Date.now()) { const b2 = this._bucket(domain, false); if (b2) b2.delete(name); continue; }
+      this._bucket(domain, true).set(name, c);
+    }
+    if (settings.persistCookies) this.persist();
+  },
+
+  // document.cookie view for a page URL.
+  documentCookie(url) {
+    let u; try { u = new URL(url); } catch { return ''; }
+    const now = Date.now();
+    const out = [];
+    for (const [host, bucket] of this.map) {
+      if (!(u.hostname === host || u.hostname.endsWith('.' + host))) continue;
+      for (const [name, c] of bucket) {
+        if (c.httpOnly) continue;
+        if (c.exp && c.exp < now) continue;
+        out.push(name + '=' + c.v);
+      }
+    }
+    return out.join('; ');
+  },
+
+  // Write a document.cookie string from a page.
+  writeDocumentCookie(url, str) {
+    if (!str) return;
+    let u; try { u = new URL(url); } catch { return; }
+    const bits = str.split(';');
+    const first = bits.shift() || '';
+    const eq = first.indexOf('=');
+    if (eq < 1) return;
+    const name = first.slice(0, eq).trim();
+    const value = first.slice(eq + 1).trim();
+    let domain = u.hostname, path = u.pathname.replace(/[^/]*$/, '') || '/', exp = 0, secure = false;
+    for (const b of bits) {
+      const i = b.indexOf('=');
+      const k = (i < 0 ? b : b.slice(0, i)).trim().toLowerCase();
+      const val = i < 0 ? '' : b.slice(i + 1).trim();
+      if (k === 'domain') domain = val.replace(/^\./, '');
+      else if (k === 'path') path = val || '/';
+      else if (k === 'secure') secure = true;
+      else if (k === 'max-age') { const s = parseInt(val, 10); if (!isNaN(s)) exp = Date.now() + s * 1000; }
+      else if (k === 'expires') { const d = Date.parse(val); if (!isNaN(d)) exp = d; }
+    }
+    const bucket = this._bucket(domain, true);
+    if (exp && exp < Date.now()) bucket.delete(name);
+    else bucket.set(name, { v: value, path, exp, secure, httpOnly: false });
+    if (settings.persistCookies) this.persist();
+  },
+
+  clear() { this.map.clear(); this.persist(); },
+
+  persist() {
+    try {
+      const dump = [];
+      for (const [host, bucket] of this.map) for (const [name, c] of bucket) dump.push([host, name, c]);
+      localStorage.setItem('wp.cookies', JSON.stringify(dump));
+    } catch {}
+  },
+
+  restore() {
+    try {
+      const dump = JSON.parse(localStorage.getItem('wp.cookies') || '[]');
+      for (const [host, name, c] of dump) this._bucket(host, true).set(name, c);
+    } catch {}
+  },
+};
+
+function splitSetCookie(header) {
+  // Split on commas that are not inside an Expires date.
+  const out = [];
+  let cur = '';
+  for (let i = 0; i < header.length; i++) {
+    const ch = header[i];
+    if (ch === ',') {
+      const rest = header.slice(i + 1, i + 30);
+      if (/^\s*(expires|max-age|path|domain|secure|httponly|samesite|partitioned)/i.test(rest)) {
+        out.push(cur); cur = '';
+        continue;
+      }
+    }
+    cur += ch;
+  }
+  if (cur.trim()) out.push(cur);
+  return out;
+}
+
+/* -------------------------------------------------------- per-origin db -- */
+const originStore = {
+  key(origin, area) { return 'wp.store:' + area + ':' + origin; },
+  get(origin, area) {
+    try { return JSON.parse(localStorage.getItem(this.key(origin, area)) || '{}'); } catch { return {}; }
+  },
+  set(origin, area, obj) { try { localStorage.setItem(this.key(origin, area), JSON.stringify(obj)); } catch {} },
+  clearOrigin(origin) {
+    for (const area of ['local', 'session']) localStorage.removeItem(this.key(origin, area));
+  },
+};
+
+/* ---------------------------------------------------------------- cache -- */
+const memCache = new Map();
+const CACHE_MAX = 260;
+function cacheGet(url) {
+  if (!settings.cache) return null;
+  const e = memCache.get(url);
+  if (!e) return null;
+  if (e.exp && e.exp < Date.now()) { memCache.delete(url); return null; }
+  return e;
+}
+function cachePut(url, entry) {
+  if (!settings.cache) return;
+  if (memCache.size > CACHE_MAX) memCache.delete(memCache.keys().next().value);
+  memCache.set(url, entry);
+}
+
+/* -------------------------------------------------------- request queue -- */
+let inFlight = 0;
+const waitQueue = [];
+function limit(fn) {
+  return new Promise((resolve, reject) => {
+    const run = () => {
+      inFlight++;
+      fn().then(resolve, reject).finally(() => {
+        inFlight--;
+        if (waitQueue.length) waitQueue.shift()();
+      });
+    };
+    inFlight < settings.concurrency ? run() : waitQueue.push(run);
+  });
+}
+const withTimeout = (p, ms) =>
+  Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('Timeout after ' + ms + 'ms')), ms))]);
+
+/* --------------------------------------------------------------- network - */
+const HOP_HEADERS = new Set(['host', 'connection', 'content-length', 'accept-encoding',
+  'transfer-encoding', 'keep-alive', 'proxy-connection', 'upgrade', 'cookie', 'user-agent']);
+
+function sanitizeHeaders(h) {
+  const out = {};
+  for (const k in h || {}) {
+    const lk = k.toLowerCase();
+    if (HOP_HEADERS.has(lk)) continue;
+    if (lk.startsWith('sec-') && lk !== 'sec-fetch-dest' && lk !== 'sec-fetch-mode' && lk !== 'sec-fetch-site') {
+      // keep sec- headers, libcurl tolerates them
+    }
+    out[k] = h[k];
+  }
+  return out;
+}
+
+function netLog(entry) {
+  if (state.netPaused) return;
+  state.netLog.unshift(entry);
+  if (state.netLog.length > 400) state.netLog.pop();
+  renderNet();
+}
+
+async function request(url, init = {}, referer) {
+  if (!state.http) throw new Error('Runtime not ready');
+
+  const headers = Object.assign(
+    { 'User-Agent': settings.spoofUA || navigator.userAgent,
+      'Accept-Language': (navigator.language || 'en') + ',en;q=0.8' },
+    sanitizeHeaders(init.headers)
+  );
+  if (init.body != null && !hasHeader(headers, 'content-type') && init.contentType) {
+    headers['Content-Type'] = init.contentType;
+  }
+  const cookie = cookieJar.header(url);
+  if (cookie) headers['Cookie'] = cookie;
+  if (settings.sendReferer && referer && !hasHeader(headers, 'referer')) {
+    headers['Referer'] = referer;
+    if (init.method && init.method !== 'GET' && init.method !== 'HEAD') {
+      try { headers['Origin'] = new URL(referer).origin; } catch {}
+    }
+  }
+
+  const idem = !init.method || /^(GET|HEAD)$/i.test(init.method);
+  const t0 = performance.now();
+  let attempt = 0;
+  for (;;) {
+    try {
+      const res = await withTimeout(
+        state.http.fetch(url, Object.assign({ redirect: 'follow' }, init, { headers })),
+        settings.timeout
+      );
+      const setCookie = res.headers.get('set-cookie');
+      if (setCookie) cookieJar.set(res.url || url, setCookie);
+      netLog({
+        id: (Math.random() * 1e9) | 0, url: res.url || url, method: init.method || 'GET',
+        status: res.status, ms: Math.round(performance.now() - t0),
+        size: null, type: res.headers.get('content-type') || '', at: Date.now(),
+      });
+      return res;
+    } catch (e) {
+      if (!idem || attempt >= settings.retries) {
+        netLog({
+          id: (Math.random() * 1e9) | 0, url, method: init.method || 'GET',
+          status: 0, ms: Math.round(performance.now() - t0), error: String(e && e.message || e),
+          type: '', at: Date.now(),
+        });
+        throw e;
+      }
+      attempt++;
+      await new Promise(r => setTimeout(r, 350 * attempt + Math.random() * 250));
+    }
+  }
+}
+function hasHeader(h, name) {
+  const n = name.toLowerCase();
+  return Object.keys(h).some(k => k.toLowerCase() === n);
+}
+
+/* --------------------------------------------------------- text fetching - */
+const textCache = new Map();
+function fetchText(url, ref, kind) {
+  const hit = cacheGet(url);
+  if (hit) return Promise.resolve(hit.text);
+  const p = limit(() => withTimeout((async () => {
+    const res = await request(url, {}, ref);
+    if (!res.ok && res.status !== 0) throw new Error('HTTP ' + res.status);
+    const buf = await res.arrayBuffer();
+    const text = decodeBody(buf, res.headers.get('content-type'));
+    cachePut(url, { text, exp: Date.now() + 60000 });
+    return text;
+  })(), settings.timeout));
+  p.catch(() => {});
+  return p;
+}
+
+/* ============================================================ INJECTION == */
+/* Everything below is stringified and dropped into every proxied frame.    */
+function AGENT(token, opts) {
+  'use strict';
+  var W = window, D = document;
+  var PAGE = opts.url || D.baseURI;
+  var ORIGIN = opts.origin || '';
+  var TOP = W;
+  try { TOP = W.top || W; } catch (e) { TOP = W.parent; }
+  var T = '__wp__';
+
+  function P(msg, transfer) {
+    try { TOP.postMessage(Object.assign({ [T]: token }, msg), '*', transfer || []); } catch (e) {}
+  }
+  function abs(u) { try { return new URL(u, D.baseURI).href; } catch (e) { return null; } }
+  function sameOrigin(u) {
+    try { return new URL(u, D.baseURI).origin === ORIGIN; } catch (e) { return false; }
+  }
+  function isSpecial(u) { return /^(javascript:|mailto:|tel:|sms:|data:|blob:|about:|chrome:|file:)/i.test(u || ''); }
+
+  /* ====================================================== frame location = */
+  var current = { href: PAGE, origin: ORIGIN };
+  function parse(u) { try { return new URL(u, D.baseURI); } catch (e) { return null; } }
+
+  var loc = {};
+  function syncLoc(u) {
+    var p = parse(u); if (!p) return;
+    current.href = p.href; current.origin = p.origin;
+    loc.href = p.href; loc.protocol = p.protocol; loc.host = p.host; loc.hostname = p.hostname;
+    loc.port = p.port; loc.pathname = p.pathname; loc.search = p.search; loc.hash = p.hash;
+    loc.origin = p.origin;
+  }
+  syncLoc(PAGE);
+  loc.assign = function (u) { var a = abs(u); if (a) nav(a); };
+  loc.replace = function (u) { var a = abs(u); if (a) nav(a, { replace: true }); };
+  loc.reload = function () { P({ type: 'reload' }); };
+  loc.toString = function () { return current.href; };
+  Object.defineProperty(loc, 'ancestorOrigins', { get: function () { return []; } });
+  ['href', 'protocol', 'host', 'hostname', 'port', 'pathname', 'search', 'hash', 'origin'].forEach(function (k) {
+    var key = k;
+    var store = loc[key];
+    Object.defineProperty(loc, key, {
+      get: function () { return store; },
+      set: function (v) {
+        if (key === 'href') { var a = abs(v); if (a) nav(a); return; }
+        var p = parse(current.href);
+        if (!p) return;
+        if (key === 'hash') { p.hash = v; var h = p.href; syncLoc(h); P({ type: 'hash', url: h }); return; }
+        if (key === 'search') { p.search = v; nav(p.href); return; }
+        if (key === 'pathname') { p.pathname = v; nav(p.href); return; }
+        if (key === 'protocol') { p.protocol = v; nav(p.href); return; }
+        store = v;
+      },
+    });
+  });
+
+  var realLocation = W.location;
+  try { Object.defineProperty(W, 'location', { value: loc, writable: false, configurable: true }); }
+  catch (e) { /* leave native location */ }
+  try { Object.defineProperty(D, 'location', { value: loc, configurable: true }); } catch (e) {}
+
+  /* ============================================================ navigation */
+  function nav(u, extra) { P(Object.assign({ type: 'nav', url: u }, extra || {})); }
+
+  window.addEventListener('click', function (e) {
+    if (e.defaultPrevented || e.button > 1) return;
+    var a = e.target && e.target.closest ? e.target.closest('a[href], area[href]') : null;
+    if (!a) return;
+    var raw = (a.getAttribute('href') || '').trim();
+    if (!raw || isSpecial(raw)) return;
+    if (raw.charAt(0) === '#') {
+      e.preventDefault();
+      var id = decodeURIComponent(raw.slice(1));
+      var el = id && (D.getElementById(id) || D.getElementsByName(id)[0]);
+      if (el) el.scrollIntoView(); else if (!id) scrollTo(0, 0);
+      var h = current.href.split('#')[0] + raw;
+      syncLoc(h); P({ type: 'hash', url: h });
+      return;
+    }
+    e.preventDefault();
+    var target = a.getAttribute('target');
+    if (a.hasAttribute('download')) {
+      P({ type: 'download', url: a.href, name: a.getAttribute('download') });
+    } else if (target === '_blank' && (e.ctrlKey || e.metaKey || e.shiftKey)) {
+      P({ type: 'open', url: a.href });
+    } else {
+      nav(a.href, { target: target || '' });
+    }
+  }, false);
+
+  document.addEventListener('auxclick', function (e) {
+    var a = e.target && e.target.closest ? e.target.closest('a[href]') : null;
+    if (e.button === 1 && a) {
+      var r = (a.getAttribute('href') || '').trim();
+      if (r && r.charAt(0) !== '#' && !isSpecial(r)) { e.preventDefault(); P({ type: 'open', url: a.href }); }
+    }
+  }, true);
+
+  /* ------------------------------------------------------------- forms --- */
+  function buildMultipart(fd, boundary) {
+    var parts = [];
+    var enc = new TextEncoder();
+    fd.forEach(function (v, k) {
+      var head = '--' + boundary + '\r\n';
+      if (typeof v === 'string') {
+        head += 'Content-Disposition: form-data; name="' + k.replace(/"/g, '%22') + '"\r\n\r\n' + v + '\r\n';
+        parts.push(enc.encode(head));
+      } else {
+        head += 'Content-Disposition: form-data; name="' + k.replace(/"/g, '%22') + '"; filename="' +
+                (v.name || 'blob').replace(/"/g, '%22') + '"\r\nContent-Type: ' + (v.type || 'application/octet-stream') + '\r\n\r\n';
+        parts.push(enc.encode(head));
+        parts.push(v);
+        parts.push(enc.encode('\r\n'));
+      }
+    });
+    parts.push(enc.encode('--' + boundary + '--\r\n'));
+    return parts;
+  }
+
+  function submitForm(form, submitter) {
+    var attr = function (n) { return (submitter && submitter.getAttribute('form' + n)) || form.getAttribute(n); };
+    var action = abs(attr('action') || '') || current.href;
+    var method = (attr('method') || 'get').toLowerCase();
+    if (method === 'dialog') return;
+    var fd = new FormData(form);
+    if (submitter && submitter.name) fd.append(submitter.name, submitter.value);
+
+    if (method === 'post') {
+      var enctype = (attr('enctype') || '').toLowerCase();
+      if (/multipart/.test(enctype) || containsFile(fd)) {
+        var boundary = '----VpBoundary' + Math.random().toString(36).slice(2);
+        var parts = buildMultipart(fd, boundary);
+        var total = 0;
+        parts.forEach(function (p) { total += p.byteLength || p.size || 0; });
+        var out = new Uint8Array(total);
+        var off = 0, chain = Promise.resolve();
+        parts.forEach(function (p) {
+          chain = chain.then(function () {
+            if (p instanceof Uint8Array) { out.set(p, off); off += p.byteLength; return; }
+            return p.arrayBuffer().then(function (b) { out.set(new Uint8Array(b), off); off += b.byteLength; });
+          });
+        });
+        chain.then(function () {
+          P({ type: 'nav', url: action, method: 'POST', body: out.buffer,
+              contentType: 'multipart/form-data; boundary=' + boundary }, [out.buffer]);
+        });
+        return;
+      }
+      var usp = new URLSearchParams();
+      fd.forEach(function (v, k) { usp.append(k, typeof v === 'string' ? v : v.name); });
+      var body = usp.toString();
+      P({ type: 'nav', url: action, method: 'POST', body: body,
+          contentType: 'application/x-www-form-urlencoded' });
+    } else {
+      var u = new URL(action);
+      u.search = '';
+      u.hash = '';
+      fd.forEach(function (v, k) { u.searchParams.append(k, typeof v === 'string' ? v : v.name); });
+      nav(u.href);
+    }
+  }
+  function containsFile(fd) {
+    var has = false;
+    fd.forEach(function (v) { if (typeof v !== 'string' && v && v.size !== undefined) has = true; });
+    return has;
+  }
+
+  window.addEventListener('submit', function (e) {
+    if (e.defaultPrevented) return;
+    if (e.target && e.target.tagName === 'FORM') {
+      e.preventDefault();
+      submitForm(e.target, e.submitter);
+    }
+  }, false);
+
+  var origSubmit = HTMLFormElement.prototype.submit;
+  HTMLFormElement.prototype.submit = function () { submitForm(this); };
+  if (HTMLFormElement.prototype.requestSubmit) {
+    var origReq = HTMLFormElement.prototype.requestSubmit;
+    HTMLFormElement.prototype.requestSubmit = function (s) {
+      if (s && s.type && s.type !== 'submit') { origReq.call(this, s); return; }
+      submitForm(this, s);
+    };
+  }
+
+  /* ------------------------------------------------------- history API --- */
+  var hStack = [{ state: null, url: current.href }];
+  var hPos = 0;
+  function pushState(state, title, url) {
+    var u = url == null ? current.href : abs(url);
+    hStack = hStack.slice(0, hPos + 1);
+    hStack.push({ state: state, url: u });
+    hPos = hStack.length - 1;
+    syncLoc(u);
+    P({ type: 'hash', url: u });
+  }
+  function replaceState(state, title, url) {
+    var u = url == null ? current.href : abs(url);
+    hStack[hPos] = { state: state, url: u };
+    syncLoc(u);
+    P({ type: 'hash', url: u });
+  }
+  try {
+    history.pushState = pushState;
+    history.replaceState = replaceState;
+    Object.defineProperty(history, 'state', { get: function () { return hStack[hPos] ? hStack[hPos].state : null; }, configurable: true });
+    history.back = function () {
+      if (hPos > 0) { hPos--; syncLoc(hStack[hPos].url); firePop(hStack[hPos].state); P({ type: 'hash', url: hStack[hPos].url }); }
+      else P({ type: 'historyBack' });
+    };
+    history.forward = function () {
+      if (hPos < hStack.length - 1) { hPos++; syncLoc(hStack[hPos].url); firePop(hStack[hPos].state); P({ type: 'hash', url: hStack[hPos].url }); }
+      else P({ type: 'historyForward' });
+    };
+    history.go = function (n) {
+      if (n === undefined || n === 0) { P({ type: 'reload' }); return; }
+      if (n < 0) { for (var i = 0; i < -n; i++) history.back(); }
+      else { for (var j = 0; j < n; j++) history.forward(); }
+    };
+  } catch (e) {}
+  function firePop(st) {
+    try { W.dispatchEvent(new PopStateEvent('popstate', { state: st })); } catch (e) {}
+  }
+
+  /* Navigation API is a safety net for anything we miss. */
+  if (W.navigation && W.navigation.addEventListener) {
+    try {
+      W.navigation.addEventListener('navigate', function (e) {
+        if (e.hashChange || e.downloadRequest || !e.cancelable) return;
+        if (e.destination && e.destination.sameDocument) return;
+        e.preventDefault();
+        if (e.navigationType === 'reload') P({ type: 'reload' });
+        else nav(e.destination.url);
+      });
+    } catch (e) {}
+  }
+
+  window.addEventListener('hashchange', function () {
+    syncLoc(current.href.split('#')[0] + location.hash);
+  });
+
+  /* ------------------------------------------------------------- window --- */
+  var origOpen = W.open;
+  W.open = function (u, name, features) {
+    var url = u ? abs(u) : 'about:blank';
+    if (url === 'about:blank') { P({ type: 'openBlank' }); return null; }
+    P({ type: 'open', url: url });
+    return makeFakeWindow(url);
+  };
+  function makeFakeWindow(url) {
+    var fw = {
+      closed: false, name: '', opener: W,
+      location: { href: url, assign: function (u) { P({ type: 'open', url: abs(u) }); } },
+      close: function () { this.closed = true; },
+      focus: function () {}, blur: function () {},
+      postMessage: function (m, o) { P({ type: 'childMessage', data: m }); },
+    };
+    return fw;
+  }
+  W.close = function () { P({ type: 'close' }); };
+
+  /* ------------------------------------------------------------ storage --- */
+  var localData = {}, sessionData = {};
+  function makeStore(data, area) {
+    var s = {
+      getItem: function (k) { k = String(k); return Object.prototype.hasOwnProperty.call(data, k) ? data[k] : null; },
+      setItem: function (k, v) { k = String(k); data[k] = String(v); P({ type: 'storeSet', area: area, key: k, value: String(v) }); },
+      removeItem: function (k) { k = String(k); delete data[k]; P({ type: 'storeRemove', area: area, key: k }); },
+      clear: function () { for (var k in data) delete data[k]; P({ type: 'storeClear', area: area }); },
+      key: function (i) { var ks = Object.keys(data); return i >= 0 && i < ks.length ? ks[i] : null; },
+    };
+    Object.defineProperty(s, 'length', { get: function () { return Object.keys(data).length; } });
+    return s;
+  }
+  var localStore = makeStore(localData, 'local');
+  var sessionStore = makeStore(sessionData, 'session');
+  function nativeWorks(name) {
+    try { W[name].setItem('__wp', '1'); W[name].removeItem('__wp'); return true; } catch (e) { return false; }
+  }
+  if (!nativeWorks('localStorage')) {
+    try { Object.defineProperty(W, 'localStorage', { value: localStore, configurable: true }); } catch (e) {}
+  }
+  if (!nativeWorks('sessionStorage')) {
+    try { Object.defineProperty(W, 'sessionStorage', { value: sessionStore, configurable: true }); } catch (e) {}
+  }
+
+  /* ------------------------------------------------------- document.cookie */
+  var cookieCache = '';
+  try {
+    D.cookie;
+  } catch (e) {}
+  try {
+    Object.defineProperty(D, 'cookie', {
+      configurable: true,
+      get: function () { return cookieCache; },
+      set: function (v) { P({ type: 'cookieSet', value: String(v) }); mergeCookie(String(v)); },
+    });
+  } catch (e) {}
+  function mergeCookie(str) {
+    var first = str.split(';')[0];
+    var eq = first.indexOf('=');
+    if (eq < 1) return;
+    var name = first.slice(0, eq).trim();
+    var val = first.slice(eq + 1).trim();
+    var list = cookieCache ? cookieCache.split('; ') : [];
+    var found = false;
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].split('=')[0] === name) { list[i] = name + '=' + val; found = true; }
+    }
+    if (!found) list.push(name + '=' + val);
+    cookieCache = list.filter(Boolean).join('; ');
+  }
+
+  /* ------------------------------------------------------------- fetch --- */
+  var pend = {}, seq = 0, wsSeq = 0, wsMap = {};
+  W.addEventListener('message', function (e) {
+    var d = e.data;
+    if (!d || d[T] !== token) return;
+    if (d.type === 'fetchHead' || d.type === 'fetchChunk' || d.type === 'fetchEnd' || d.type === 'fetchError') {
+      var cb = pend[d.id]; if (!cb) return;
+      if (d.type === 'fetchHead') cb.head(d);
+      else if (d.type === 'fetchChunk') cb.chunk(d);
+      else if (d.type === 'fetchEnd') { cb.end(); delete pend[d.id]; }
+      else { cb.error(d); delete pend[d.id]; }
+      return;
+    }
+    if (d.type === 'wsOpen' || d.type === 'wsMessage' || d.type === 'wsClose' || d.type === 'wsError') {
+      var w = wsMap[d.id]; if (w) w.__handle(d); return;
+    }
+    if (d.type === 'storeData') {
+      if (d.area === 'local') { for (var k in localData) delete localData[k]; Object.assign(localData, d.data || {}); }
+      else { for (var k2 in sessionData) delete sessionData[k2]; Object.assign(sessionData, d.data || {}); }
+      return;
+    }
+    if (d.type === 'cookieData') { cookieCache = d.value || ''; return; }
+    if (d.type === 'findResult') { if (W.__wpFind) W.__wpFind(d); return; }
+    if (d.type === 'cmd') {
+      if (d.action === 'zoom') { try { D.documentElement.style.zoom = d.value; } catch (e) {} }
+      if (d.action === 'scrollTop') { scrollTo(0, 0); }
+      if (d.action === 'scrollBottom') { scrollTo(0, D.body.scrollHeight); }
+    }
+  });
+
+  function streamFetch(input, init) {
+    var req;
+    try { req = new Request(input, init); } catch (e) { return Promise.reject(e); }
+    var id = ++seq;
+    var signal = req.signal;
+    return req.arrayBuffer().then(function (body) {
+      var headers = {};
+      req.headers.forEach(function (v, k) { headers[k] = v; });
+      return new Promise(function (resolve, reject) {
+        var controller = null;
+        var stream = new ReadableStream({
+          start: function (c) { controller = c; },
+          cancel: function () { P({ type: 'fetchAbort', id: id }); },
+        });
+        var settled = false;
+        pend[id] = {
+          head: function (m) {
+            if (settled) return;
+            settled = true;
+            var init2 = { status: m.status, statusText: m.statusText || '', headers: m.headers || [] };
+            if (m.status === 204 || m.status === 205 || m.status === 304) init2.status = m.status;
+            resolve(new Response(stream, init2));
+          },
+          chunk: function (m) { try { controller.enqueue(new Uint8Array(m.chunk)); } catch (e) {} },
+          end: function () { try { controller.close(); } catch (e) {} },
+          error: function (m) {
+            var err = new TypeError(m.error || 'Network error');
+            try { controller.error(err); } catch (e) {}
+            if (!settled) { settled = true; reject(err); }
+          },
+        };
+        var msg = { type: 'fetch', id: id, url: req.url,
+                    init: { method: req.method, headers: headers, body: body.byteLength ? body : undefined } };
+        P(msg, body.byteLength ? [body] : []);
+        if (signal) {
+          if (signal.aborted) P({ type: 'fetchAbort', id: id });
+          else signal.addEventListener('abort', function () { P({ type: 'fetchAbort', id: id }); });
+        }
+      });
+    });
+  }
+  try { Object.defineProperty(W, 'fetch', { value: streamFetch, writable: true, configurable: true }); }
+  catch (e) { W.fetch = streamFetch; }
+
+  /* --------------------------------------------------------------- XHR --- */
+  function WarpXHR() {
+    var x = this, headers = {}, listeners = {}, aborted = false, t0 = 0;
+    x.readyState = 0; x.status = 0; x.statusText = ''; x.responseText = ''; x.response = '';
+    x.responseType = ''; x.responseURL = ''; x.timeout = 0; x.withCredentials = false;
+    x.upload = { addEventListener: function (t, f) { (listeners['upload:' + t] = listeners['upload:' + t] || []).push(f); } };
+    x._h = null;
+
+    function fire(t, extra) {
+      var ev = Object.assign({ type: t, target: x, currentTarget: x, timeStamp: Date.now() }, extra || {});
+      var direct = x['on' + t];
+      if (typeof direct === 'function') { try { direct.call(x, ev); } catch (e) { P({ type: 'console', level: 'error', args: [String(e)] }); } }
+      (listeners[t] || []).slice().forEach(function (f) { try { f.call(x, ev); } catch (e) {} });
+    }
+    x.addEventListener = function (t, f) { (listeners[t] = listeners[t] || []).push(f); };
+    x.removeEventListener = function (t, f) { var a = listeners[t] || []; var i = a.indexOf(f); if (i >= 0) a.splice(i, 1); };
+    x.dispatchEvent = fire;
+    x.open = function (m, u, async, user, pass) {
+      x._m = m; x._u = abs(u); x.readyState = 1; fire('readystatechange');
+    };
+    x.setRequestHeader = function (k, v) { headers[k] = v; };
+    x.getResponseHeader = function (k) { return x._h ? x._h.get(k) : null; };
+    x.getAllResponseHeaders = function () { var s = ''; if (x._h) x._h.forEach(function (v, k) { s += k + ': ' + v + '\r\n'; }); return s; };
+    x.overrideMimeType = function () {};
+    x.abort = function () { aborted = true; if (x._abort) x._abort(); fire('abort'); fire('loadend'); };
+    x.send = function (b) {
+      aborted = false;
+      t0 = Date.now();
+      var bodyless = /^(GET|HEAD)$/i.test(x._m);
+      var ctrl = new AbortController();
+      x._abort = function () { ctrl.abort(); };
+      fire('loadstart');
+      streamFetch(x._u, { method: x._m, headers: headers, body: bodyless ? undefined : b, signal: ctrl.signal })
+        .then(function (r) {
+          if (aborted) return;
+          x.status = r.status; x.statusText = r.statusText; x.responseURL = x._u; x._h = r.headers;
+          x.readyState = 2; fire('readystatechange');
+          x.readyState = 3; fire('readystatechange');
+          var type = x.responseType;
+          if (type === 'arraybuffer') return r.arrayBuffer();
+          if (type === 'blob') return r.blob();
+          if (type === 'json') return r.text().then(function (t) { try { return JSON.parse(t); } catch (e) { return null; } });
+          if (type === 'document') return r.text().then(function (t) { return new DOMParser().parseFromString(t, 'text/html'); });
+          return r.text();
+        })
+        .then(function (v) {
+          if (aborted) return;
+          x.response = v;
+          if (!x.responseType || x.responseType === 'text') x.responseText = v;
+          x.readyState = 4;
+          fire('readystatechange');
+          fire('load');
+          fire('loadend');
+        })
+        .catch(function (err) {
+          if (aborted) return;
+          x.readyState = 4;
+          fire('readystatechange');
+          fire('error', { message: String(err && err.message || err) });
+          fire('loadend');
+        });
+    };
+  }
+  try { Object.defineProperty(W, 'XMLHttpRequest', { value: WarpXHR, writable: true, configurable: true }); }
+  catch (e) { W.XMLHttpRequest = WarpXHR; }
+
+  /* ----------------------------------------------------------- WebSocket */
+  function WarpWS(url, protocols) {
+    var self = this;
+    self.url = abs(url);
+    self.readyState = 0; self.bufferedAmount = 0; self.protocol = ''; self.extensions = '';
+    self.binaryType = 'blob';
+    self.onopen = self.onmessage = self.onerror = self.onclose = null;
+    var listeners = {};
+    var id = ++wsSeq;
+    wsMap[id] = self;
+
+    self.addEventListener = function (t, f) { (listeners[t] = listeners[t] || []).push(f); };
+    self.removeEventListener = function (t, f) { var a = listeners[t] || []; var i = a.indexOf(f); if (i >= 0) a.splice(i, 1); };
+    function fire(t, ev) {
+      ev = Object.assign({ type: t, target: self, currentTarget: self }, ev || {});
+      var d = self['on' + t];
+      if (typeof d === 'function') { try { d.call(self, ev); } catch (e) {} }
+      (listeners[t] || []).slice().forEach(function (f) { try { f.call(self, ev); } catch (e) {} });
+    }
+    self.dispatchEvent = fire;
+
+    self.__handle = function (m) {
+      if (m.type === 'wsOpen') { self.readyState = 1; self.protocol = m.protocol || ''; fire('open', {}); }
+      else if (m.type === 'wsMessage') {
+        var data = m.bin ? (self.binaryType === 'arraybuffer' ? m.data : new Blob([m.data])) : m.data;
+        fire('message', { data: data, origin: new URL(self.url).origin });
+      } else if (m.type === 'wsClose') {
+        self.readyState = 3; delete wsMap[id];
+        fire('close', { code: m.code || 1000, reason: m.reason || '', wasClean: m.wasClean !== false });
+      } else if (m.type === 'wsError') {
+        fire('error', { message: m.error || '' });
+      }
+    };
+    self.send = function (data) {
+      if (typeof data === 'string') P({ type: 'wsSend', id: id, data: data, bin: false });
+      else if (data instanceof ArrayBuffer) P({ type: 'wsSend', id: id, data: data, bin: true }, [data]);
+      else if (data && data.buffer) {
+        var ab = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
+        P({ type: 'wsSend', id: id, data: ab, bin: true }, [ab]);
+      } else P({ type: 'wsSend', id: id, data: String(data), bin: false });
+    };
+    self.close = function (code, reason) {
+      P({ type: 'wsClose', id: id, code: code || 1000, reason: reason || '' });
+      self.readyState = 2;
+    };
+    P({ type: 'wsOpen', id: id, url: self.url, protocols: protocols });
+  }
+  WarpWS.CONNECTING = 0; WarpWS.OPEN = 1; WarpWS.CLOSING = 2; WarpWS.CLOSED = 3;
+  try { Object.defineProperty(W, 'WebSocket', { value: WarpWS, writable: true, configurable: true }); }
+  catch (e) { W.WebSocket = WarpWS; }
+
+  /* --------------------------------------------------------- EventSource */
+  function WarpES(url, options) {
+    var self = this;
+    self.url = abs(url);
+    self.readyState = 0;
+    self.withCredentials = !!(options && options.withCredentials);
+    self.onopen = self.onmessage = self.onerror = null;
+    var listeners = {};
+    var id = ++seq;
+    var lastId = '';
+    self.addEventListener = function (t, f) { (listeners[t] = listeners[t] || []).push(f); };
+    self.removeEventListener = function (t, f) { var a = listeners[t] || []; var i = a.indexOf(f); if (i >= 0) a.splice(i, 1); };
+    function fire(t, ev) {
+      ev = Object.assign({ type: t, target: self, currentTarget: self }, ev || {});
+      var d = self['on' + t];
+      if (typeof d === 'function') { try { d.call(self, ev); } catch (e) {} }
+      (listeners[t] || []).slice().forEach(function (f) { try { f.call(self, ev); } catch (e) {} });
+    }
+    var buffer = '';
+    pend[id] = {
+      head: function () { self.readyState = 1; fire('open', {}); },
+      chunk: function (m) {
+        buffer += new TextDecoder().decode(new Uint8Array(m.chunk));
+        var idx;
+        while ((idx = buffer.indexOf('\n\n')) >= 0) {
+          var raw = buffer.slice(0, idx); buffer = buffer.slice(idx + 2);
+          var dataLines = [], evName = 'message', evId = null;
+          raw.split('\n').forEach(function (line) {
+            if (line.charAt(0) === ':') return;
+            var i = line.indexOf(':'); var f = i < 0 ? line : line.slice(0, i);
+            var v = i < 0 ? '' : line.slice(i + 1).replace(/^ /, '');
+            if (f === 'data') dataLines.push(v);
+            else if (f === 'event') evName = v;
+            else if (f === 'id') evId = v;
+          });
+          if (evId != null) lastId = evId;
+          if (dataLines.length) {
+            var evt = { data: dataLines.join('\n'), origin: new URL(self.url).origin, lastEventId: lastId || '' };
+            if (evName === 'message') fire('message', evt);
+            else fire(evName, evt);
+          }
+        }
+      },
+      end: function () { self.readyState = 2; delete pend[id]; },
+      error: function () { self.readyState = 2; fire('error', {}); },
+    };
+    P({ type: 'fetch', id: id, url: self.url,
+        init: { method: 'GET', headers: { 'Accept': 'text/event-stream' } } });
+    self.close = function () { self.readyState = 2; P({ type: 'fetchAbort', id: id }); };
+  }
+  try { Object.defineProperty(W, 'EventSource', { value: WarpES, writable: true, configurable: true }); }
+  catch (e) { W.EventSource = WarpES; }
+
+  /* ---------------------------------------------------------- workers ---- */
+  if (W.Worker) {
+    var NativeWorker = W.Worker;
+    W.Worker = function (scriptUrl, options) {
+      try {
+        var u = new URL(scriptUrl, D.baseURI).href;
+        if (/^blob:/.test(u)) return new NativeWorker(scriptUrl, options);
+        return new NativeWorker(u, options);
+      } catch (e) { return new NativeWorker(scriptUrl, options); }
+    };
+    W.Worker.prototype = NativeWorker.prototype;
+  }
+
+  /* ------------------------------------------------------- navigator ----- */
+  var nav_ = {};
+  if (!W.navigator.serviceWorker) {
+    nav_.serviceWorker = {
+      controller: null,
+      register: function (u, o) {
+        return Promise.resolve({
+          scope: abs(u || './'),
+          update: function () { return Promise.resolve(); },
+          unregister: function () { return Promise.resolve(true); },
+          addEventListener: function () {},
+          installing: null, waiting: null, active: null,
+        });
+      },
+      getRegistrations: function () { return Promise.resolve([]); },
+      addEventListener: function () {},
+      ready: Promise.resolve({ scope: ORIGIN + '/' }),
+    };
+  }
+  if (!W.navigator.clipboard) {
+    nav_.clipboard = {
+      writeText: function (t) { P({ type: 'clipboard', op: 'write', text: t }); return Promise.resolve(); },
+      readText: function () { return Promise.resolve(''); },
+    };
+  }
+  if (!W.navigator.storage) {
+    nav_.storage = {
+      estimate: function () { return Promise.resolve({ quota: 5e9, usage: 0 }); },
+      persist: function () { return Promise.resolve(true); },
+      persisted: function () { return Promise.resolve(false); },
+    };
+  }
+  if (!W.navigator.share) {
+    nav_.share = function (data) { P({ type: 'share', data: data }); return Promise.resolve(); };
+  }
+  try { Object.defineProperties(W.navigator, Object.keys(nav_).reduce(function (acc, k) { acc[k] = { value: nav_[k], configurable: true }; return acc; }, {})); }
+  catch (e) {}
+
+  if (!W.navigator.sendBeacon) {
+    W.navigator.sendBeacon = function (u, data) {
+      try { streamFetch(u, { method: 'POST', body: data, keepalive: true }); return true; } catch (e) { return false; }
+    };
+  }
+  if (!W.navigator.vibrate) W.navigator.vibrate = function () { return true; };
+
+  /* ---------------------------------------------------- document fields -- */
+  try { Object.defineProperty(D, 'referrer', { get: function () { return opts.referrer || ''; }, configurable: true }); } catch (e) {}
+  try { Object.defineProperty(D, 'URL', { get: function () { return current.href; }, configurable: true }); } catch (e) {}
+  try { Object.defineProperty(D, 'documentURI', { get: function () { return current.href; }, configurable: true }); } catch (e) {}
+  try { Object.defineProperty(D, 'domain', { get: function () { return ORIGIN ? new URL(ORIGIN).hostname : ''; }, configurable: true }); } catch (e) {}
+
+  /* --------------------------------------------------- DOM fixups -------- */
+  function absolutizeSrcset(v) {
+    if (!v) return v;
+    return v.split(',').map(function (part) {
+      part = part.trim();
+      if (!part) return part;
+      var bits = part.split(/\s+/);
+      var u = bits[0];
+      if (isSpecial(u) || /^\/\//.test(u)) return part;
+      var a = abs(u);
+      if (a) bits[0] = a;
+      return bits.join(' ');
+    }).join(', ');
+  }
+
+  var SRC_ATTRS = { IMG: ['src', 'data-src', 'data-original', 'data-lazy-src'], SOURCE: ['src'],
+    VIDEO: ['src', 'poster'], AUDIO: ['src'], TRACK: ['src'], EMBED: ['src'],
+    OBJECT: ['data'], INPUT: ['src'], SCRIPT: ['src'] };
+  var SRCSET_ATTRS = ['srcset', 'data-srcset'];
+
+  function fixNode(el) {
+    if (!el || el.nodeType !== 1) return;
+    var tag = el.tagName;
+    if (tag === 'IFRAME' && el.__wpFixed !== el.getAttribute('src')) {
+      // handled separately
+    }
+    var attrs = SRC_ATTRS[tag];
+    if (attrs) {
+      attrs.forEach(function (a) {
+        var v = el.getAttribute && el.getAttribute(a);
+        if (v && !isSpecial(v) && !/^\/\//.test(v)) {
+          var full = abs(v);
+          if (full && full !== v) el.setAttribute(a, full);
+        }
+      });
+    }
+    SRCSET_ATTRS.forEach(function (a) {
+      var v = el.getAttribute && el.getAttribute(a);
+      if (v) el.setAttribute(a, absolutizeSrcset(v));
+    });
+    // Inline style url()
+    if (el.style && el.style.cssText && /url\(/.test(el.style.cssText)) {
+      el.style.cssText = fixCssUrls(el.style.cssText, D.baseURI);
+    }
+    if (tag === 'USE' || tag === 'IMAGE') {
+      ['href', 'xlink:href'].forEach(function (a) {
+        var v = el.getAttribute && el.getAttribute(a);
+        if (v && v.charAt(0) === '#' ) return;
+        if (v && !isSpecial(v)) { var f = abs(v); if (f) el.setAttribute(a, f); }
+      });
+    }
+    if (tag === 'FORM') {
+      var act = el.getAttribute('action');
+      if (act && !isSpecial(act)) { var fa = abs(act); if (fa) el.setAttribute('action', fa); }
+    }
+  }
+  function fixCssUrls(css, base) {
+    return css.replace(/url\(\s*(['"]?)([^'")]+)\1\s*\)/gi, function (m, q, u) {
+      u = u.trim();
+      if (!u || isSpecial(u) || /^\/\//.test(u)) return m;
+      var a = abs(u);
+      return a ? 'url("' + a + '")' : m;
+    });
+  }
+
+  function walk(root) {
+    if (!root || root.nodeType !== 1) return;
+    fixNode(root);
+    if (root.querySelectorAll) {
+      root.querySelectorAll('img,source,video,audio,track,embed,object,input,script,use,image,iframe,form').forEach(fixNode);
+    }
+  }
+
+  var mo = new MutationObserver(function (muts) {
+    for (var i = 0; i < muts.length; i++) {
+      var m = muts[i];
+      if (m.type === 'attributes' && m.target && m.target.tagName) fixNode(m.target);
+      for (var j = 0; j < m.addedNodes.length; j++) {
+        var n = m.addedNodes[j];
+        if (n.nodeType === 1) walk(n);
+        else if (n.nodeType === 3 && n.parentNode && n.parentNode.tagName === 'STYLE') {
+          n.parentNode.textContent = fixCssUrls(n.parentNode.textContent, D.baseURI);
+        }
+      }
+    }
+  });
+  function startObserver() {
+    try {
+      mo.observe(D.documentElement, {
+        childList: true, subtree: true,
+        attributes: true, attributeFilter: ['src', 'href', 'srcset', 'data-src', 'data-srcset', 'poster', 'style'],
+      });
+    } catch (e) {}
+    walk(D.documentElement);
+  }
+
+  /* -------------------------------------------- resource failure fallback */
+  var tried = new WeakSet();
+  window.addEventListener('error', function (e) {
+    var el = e.target;
+    if (!el || !el.tagName || tried.has(el)) return;
+    var tag = el.tagName;
+    var u = el.currentSrc || el.src || el.href || '';
+    if (!u || !/^https?:/.test(u)) return;
+    tried.add(el);
+    if (tag === 'IMG' || tag === 'VIDEO' || tag === 'AUDIO' || tag === 'SOURCE') {
+      streamFetch(u).then(function (r) { return r.blob(); }).then(function (b) {
+        if (tag === 'SOURCE' && el.parentNode) el.parentNode.src = URL.createObjectURL(b);
+        else { el.removeAttribute('srcset'); el.src = URL.createObjectURL(b); }
+      }).catch(function () {});
+    } else if (tag === 'SCRIPT') {
+      streamFetch(u).then(function (r) { return r.text(); }).then(function (code) {
+        var s = D.createElement('script');
+        s.textContent = code;
+        (D.head || D.documentElement).appendChild(s);
+        try { el.dispatchEvent(new Event('load')); } catch (e2) {}
+      }).catch(function () {});
+    } else if (tag === 'LINK' && /stylesheet/i.test(el.rel || '')) {
+      streamFetch(u).then(function (r) { return r.text(); }).then(function (css) {
+        var s = D.createElement('style');
+        s.textContent = fixCssUrls(css, u);
+        D.head.appendChild(s);
+      }).catch(function () {});
+    } else if (tag === 'IFRAME') {
+      // leave it; parent handles frames
+    }
+  }, true);
+
+  /* ------------------------------------------------------- CSSOM patching */
+  try {
+    var nativeInsert = CSSStyleSheet.prototype.insertRule;
+    CSSStyleSheet.prototype.insertRule = function (rule, i) {
+      try { return nativeInsert.call(this, rule, i); }
+      catch (e) {
+        if (/url\(/.test(rule)) {
+          var fixed = fixCssUrls(rule, D.baseURI);
+          if (fixed !== rule) return nativeInsert.call(this, fixed, i);
+        }
+        throw e;
+      }
+    };
+  } catch (e) {}
+
+  /* ------------------------------------------------------- console mirror */
+  ['log', 'info', 'warn', 'error', 'debug'].forEach(function (level) {
+    var orig = console[level];
+    console[level] = function () {
+      var args = Array.prototype.slice.call(arguments).map(function (a) {
+        try {
+          if (typeof a === 'string') return a;
+          if (a instanceof Error) return a.stack || a.message;
+          return JSON.stringify(a);
+        } catch (e) { return String(a); }
+      });
+      P({ type: 'console', level: level, args: args, src: current.href });
+      try { orig.apply(console, arguments); } catch (e) {}
+    };
+  });
+  W.addEventListener('error', function (e) {
+    P({ type: 'console', level: 'error',
+        args: [e.message + ' (' + (e.filename || '') + ':' + e.lineno + ':' + e.colno + ')'],
+        stack: e.error && e.error.stack, src: current.href });
+  });
+  W.addEventListener('unhandledrejection', function (e) {
+    P({ type: 'console', level: 'error',
+        args: ['Unhandled rejection: ' + (e.reason && (e.reason.stack || e.reason.message) || e.reason)],
+        src: current.href });
+  });
+
+  /* -------------------------------------------------------------- title -- */
+  var lastTitle = '';
+  function sendTitle() {
+    var t = D.title || '';
+    if (t !== lastTitle) { lastTitle = t; P({ type: 'title', title: t }); }
+  }
+  D.addEventListener('DOMContentLoaded', function () {
+    sendTitle();
+    var tl = D.querySelector('title');
+    if (tl) new MutationObserver(sendTitle).observe(tl, { childList: true, characterData: true, subtree: true });
+    var fl = D.querySelector('link[rel~="icon"]');
+    if (fl && fl.href) P({ type: 'favicon', url: fl.href });
+  });
+  W.addEventListener('load', sendTitle);
+
+  /* -------------------------------------------------------------- scroll - */
+  var scrollPending = false;
+  W.addEventListener('scroll', function () {
+    if (scrollPending) return;
+    scrollPending = true;
+    requestAnimationFrame(function () {
+      scrollPending = false;
+      P({ type: 'scroll', y: scrollY, max: Math.max(0, (D.body ? D.body.scrollHeight : 0) - innerHeight) });
+    });
+  }, { passive: true });
+
+  /* ------------------------------------------------------------ context -- */
+  D.addEventListener('contextmenu', function (e) {
+    var a = e.target && e.target.closest ? e.target.closest('a[href]') : null;
+    var img = e.target && e.target.closest ? e.target.closest('img') : null;
+    P({ type: 'ctxmenu', x: e.clientX, y: e.clientY,
+        link: a ? a.href : '', linkText: a ? (a.textContent || '').trim().slice(0, 80) : '',
+        img: img ? (img.currentSrc || img.src) : '', selection: String(W.getSelection ? W.getSelection() : '').slice(0, 200) });
+  });
+
+  /* ------------------------------------------------------------- find ---- */
+  var findMarks = [], findIdx = -1;
+  function clearFind() {
+    findMarks.forEach(function (m) {
+      try { m.parentNode.replaceChild(D.createTextNode(m.textContent), m); } catch (e) {}
+    });
+    findMarks = []; findIdx = -1;
+    try { D.normalize(); } catch (e) {}
+  }
+  function doFind(query, dir, matchCase) {
+    if (!query) { clearFind(); return { count: 0, index: -1 }; }
+    clearFind();
+    var needle = matchCase ? query : query.toLowerCase();
+    var walker = D.createTreeWalker(D.body || D.documentElement, NodeFilter.SHOW_TEXT, {
+      acceptNode: function (n) {
+        if (!n.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
+        var p = n.parentNode;
+        if (p && /^(SCRIPT|STYLE|NOSCRIPT|TEXTAREA)$/.test(p.tagName)) return NodeFilter.FILTER_REJECT;
+        return NodeFilter.FILTER_ACCEPT;
+      },
+    });
+    var nodes = [], n;
+    while ((n = walker.nextNode())) nodes.push(n);
+    nodes.forEach(function (node) {
+      var text = node.nodeValue;
+      var hay = matchCase ? text : text.toLowerCase();
+      var pos = 0, at;
+      var frag = D.createDocumentFragment();
+      while ((at = hay.indexOf(needle, pos)) >= 0) {
+        if (at > pos) frag.appendChild(D.createTextNode(text.slice(pos, at)));
+        var mark = D.createElement('mark');
+        mark.style.cssText = 'background:#fde68a;color:#111;border-radius:2px;padding:0 1px';
+        mark.textContent = text.slice(at, at + needle.length);
+        frag.appendChild(mark);
+        findMarks.push(mark);
+        pos = at + needle.length;
+      }
+      if (pos < text.length) frag.appendChild(D.createTextNode(text.slice(pos)));
+      if (frag.childNodes.length) node.parentNode.replaceChild(frag, node);
+    });
+    if (!findMarks.length) return { count: 0, index: -1 };
+    findIdx = dir < 0 ? findMarks.length - 1 : 0;
+    highlightFind();
+    return { count: findMarks.length, index: findIdx };
+  }
+  function stepFind(dir) {
+    if (!findMarks.length) return { count: 0, index: -1 };
+    findIdx = (findIdx + dir + findMarks.length) % findMarks.length;
+    highlightFind();
+    return { count: findMarks.length, index: findIdx };
+  }
+  function highlightFind() {
+    findMarks.forEach(function (m, i) {
+      m.style.background = i === findIdx ? '#10b981' : '#fde68a';
+      m.style.color = i === findIdx ? '#04281c' : '#111';
+    });
+    var cur = findMarks[findIdx];
+    if (cur && cur.scrollIntoView) cur.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }
+  W.__wpFind = function (d) {
+    if (d.op === 'search') P({ type: 'findResult', op: 'search', ...doFind(d.query, 1, d.matchCase) });
+    else if (d.op === 'next') P({ type: 'findResult', op: 'next', ...stepFind(1) });
+    else if (d.op === 'prev') P({ type: 'findResult', op: 'prev', ...stepFind(-1) });
+    else if (d.op === 'clear') { clearFind(); P({ type: 'findResult', op: 'clear', count: 0, index: -1 }); }
+  };
+
+  /* ------------------------------------------------------- keyboard hooks */
+  D.addEventListener('keydown', function (e) {
+    if (e.altKey || e.ctrlKey || e.metaKey || e.key === 'Escape') {
+      if (e.altKey || ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'l')) e.preventDefault();
+      P({ type: 'key', key: e.key, alt: e.altKey, ctrl: e.ctrlKey, meta: e.metaKey, shift: e.shiftKey });
+    }
+  }, true);
+
+  /* --------------------------------------------------- unload / pagehide - */
+  W.addEventListener('pagehide', function () { P({ type: 'pagehide' }); });
+
+  /* --------------------------------------------------------- clipboard ---- */
+  W.addEventListener('copy', function (e) {
+    try { P({ type: 'clipboard', op: 'copy', text: String(W.getSelection()) }); } catch (e2) {}
+  });
+
+  /* ----------------------------------------------------------- fullscreen */
+  W.__wp = { version: '3.1.0', frame: true };
+
+  /* ------------------------------------------------------------- kickoff - */
+  function boot() {
+    startObserver();
+    sendTitle();
+    P({ type: 'frameReady', url: current.href });
+  }
+  if (D.readyState === 'loading') D.addEventListener('DOMContentLoaded', boot);
+  else boot();
+}
+
+/* ---------------------------------------------------------- inject build - */
+function buildInject(url, referrer, origin) {
+  const src = '(' + AGENT.toString() + ')(' + JSON.stringify(state.token) + ',' +
+    JSON.stringify({ url, referrer: referrer || '', origin }) + ');';
+  return '<script>' + src.replace(/<\/script/gi, '<\\/script') + '<\/script>';
+}
+
+/* ========================================================= HTML PROCESSING = */
+async function processHtml(html, url, depth = 0) {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+
+  // ---- noscript: DOMParser parses with scripting disabled, so unwrap ----
+  doc.querySelectorAll('noscript').forEach(n => {
+    const frag = doc.createDocumentFragment();
+    while (n.firstChild) frag.appendChild(n.firstChild);
+    n.replaceWith(frag);
+  });
+
+  // ---- meta refresh ----
+  let refresh = null;
+  const mr = doc.querySelector('meta[http-equiv="refresh" i]');
+  if (mr) {
+    const m = /^\s*([\d.]*)\s*[;,]?\s*(?:url\s*=\s*)?['"]?\s*([^'"]*)/i.exec(mr.getAttribute('content') || '');
+    const u = m && m[2] && resolveUrl(decodeEntities(m[2].trim()), url);
+    if (u) refresh = { url: u, delay: parseFloat(m[1]) || 0 };
+    mr.remove();
+  }
+
+  // ---- base ----
+  const baseEl = doc.querySelector('base[href]');
+  const base = (baseEl && resolveUrl(baseEl.getAttribute('href'), url)) || url;
+  doc.querySelectorAll('base').forEach(n => n.remove());
+
+  // ---- strip origin-locking headers ----
+  doc.querySelectorAll('meta[http-equiv]').forEach(m => {
+    const hv = (m.getAttribute('http-equiv') || '').toLowerCase();
+    if (settings.stripCsp && (hv === 'content-security-policy' || hv === 'content-security-policy-report-only')) m.remove();
+    if (hv === 'x-frame-options' || hv === 'x-ua-compatible' || hv === 'refresh') m.remove();
+    if (hv === 'origin-trial') m.remove();
+  });
+
+  // ---- integrity / crossorigin / nonce ----
+  doc.querySelectorAll('[integrity]').forEach(n => n.removeAttribute('integrity'));
+  doc.querySelectorAll('[crossorigin]').forEach(n => n.removeAttribute('crossorigin'));
+  doc.querySelectorAll('[referrerpolicy]').forEach(n => n.removeAttribute('referrerpolicy'));
+
+  // ---- drop useless preconnect hints ----
+  doc.querySelectorAll('link[rel~="preconnect" i], link[rel~="dns-prefetch" i], link[rel~="prefetch" i], link[rel~="preload" i][as]').forEach(n => {
+    const as = (n.getAttribute('as') || '').toLowerCase();
+    if (as === 'script' || as === 'style' || as === 'font') n.remove();
+  });
+
+  const jobs = [];
+  const late = [];
+
+  // ---- stylesheets -> inline <style> ----
+  if (settings.inlineCss) {
+    doc.querySelectorAll('link[rel~="stylesheet" i]:not([rel~="alternate" i])[href]').forEach(l => {
+      const u = resolveUrl(l.getAttribute('href'), base);
+      if (!u) { l.remove(); return; }
+      jobs.push((async () => {
+        try {
+          const css = await fetchText(u, url);
+          const st = doc.createElement('style');
+          st.textContent = await inlineCss(css, u);
+          const media = l.getAttribute('media');
+          if (media) st.setAttribute('media', media);
+          const id = l.getAttribute('id');
+          if (id) st.setAttribute('id', id);
+          l.replaceWith(st);
+        } catch { /* leave the link in place */ }
+      })());
+    });
+  }
+
+  // ---- <style> url() absolutisation ----
+  doc.querySelectorAll('style').forEach(s => {
+    jobs.push(inlineCss(s.textContent, base).then(c => { s.textContent = c; }, () => {}));
+  });
+
+  // ---- external scripts -> inline ----
+  if (settings.inlineJs && settings.javaScript) {
+    doc.querySelectorAll('script[src]').forEach(s => {
+      const t = (s.getAttribute('type') || '').toLowerCase();
+      if (t && !/^(text|application)\/(x-)?(javascript|ecmascript)$/.test(t)) return; // modules & json stay
+      if (s.hasAttribute('nomodule')) { s.remove(); return; }
+      const u = resolveUrl(s.getAttribute('src'), base);
+      if (!u) return;
+      jobs.push((async () => {
+        try {
+          const code = await fetchText(u, url);
+          if (code.length > settings.maxInlineBytes) return; // too big, keep external
+          s.removeAttribute('src');
+          s.removeAttribute('async');
+          s.textContent = code.replace(/<\/script/gi, '<\\/script');
+          if (s.hasAttribute('defer')) { s.removeAttribute('defer'); late.push(s); }
+        } catch {}
+      })());
+    });
+  } else if (!settings.javaScript) {
+    doc.querySelectorAll('script').forEach(s => s.remove());
+  }
+
+  // ---- static iframes -> srcdoc (escapes X-Frame-Options) ----
+  if (settings.inlineFrames && depth < settings.frameDepth) {
+    doc.querySelectorAll('iframe[src]').forEach(f => {
+      const raw = (f.getAttribute('src') || '').trim();
+      if (!raw || /^about:|^javascript:|^data:/.test(raw)) return;
+      const u = resolveUrl(raw, base);
+      if (!u || !isHttp(u)) return;
+      jobs.push((async () => {
+        try {
+          const res = await limit(() => request(u, {}, url));
+          const ct = (res.headers.get('content-type') || '').toLowerCase();
+          if (!isHtmlType(ct)) return;
+          const buf = await res.arrayBuffer();
+          if (buf.byteLength > 3_500_000) return;
+          const inner = await processHtml(decodeBody(buf, ct), res.url || u, depth + 1);
+          f.removeAttribute('src');
+          f.setAttribute('srcdoc', inner.html);
+        } catch {}
+      })());
+    });
+  }
+
+  let done = 0;
+  const total = jobs.length;
+  if (total) jobs.forEach(j => j.then(() => setStatus(`Resources ${++done}/${total}…`)));
+  await Promise.all(jobs);
+
+  late.forEach(s => (doc.body || doc.documentElement).appendChild(s));
+
+  // ---- ensure viewport ----
+  if (!doc.querySelector('meta[name="viewport" i]')) {
+    const wp = doc.createElement('meta');
+    wp.name = 'viewport';
+    wp.content = 'width=device-width,initial-scale=1';
+    (doc.head || doc.documentElement).appendChild(wp);
+  }
+
+  const doctype = /^\s*<!doctype/i.test(html) ? '<!DOCTYPE html>' : '';
+  const inject = `<base href="${esc(base)}">` + buildInject(base, url, originOf(base));
+
+  let out = doctype + doc.documentElement.outerHTML;
+  out = out.replace(/<head([^>]*)>/i, (m, attrs) => m + inject);
+  if (!/<head/i.test(out)) out = inject + out;
+  return { html: out, refresh, base };
+}
+
+/* ---------------------------------------------------- CSS @import inliner - */
+async function inlineCss(css, base, depth = 0) {
+  const re = /@import\s+(?:url\(\s*)?['"]?([^'")\s;]+)['"]?\s*\)?([^;]*);/gi;
+  const matches = [...css.matchAll(re)];
+  for (const m of matches) {
+    let replacement = '';
+    if (depth < 4) {
+      try {
+        const u = resolveUrl(m[1], base);
+        replacement = await inlineCss(await fetchText(u, base), u, depth + 1);
+        const media = (m[2] || '').trim();
+        if (media && !/layer|supports/i.test(media)) replacement = `@media ${media}{${replacement}}`;
+      } catch {}
+    }
+    css = css.replace(m[0], () => replacement);
+  }
+  return css.replace(/url\(\s*(['"]?)(?!data:|#|blob:)([^'")]+?)\1\s*\)/gi, (m, q, u) => {
+    const a = resolveUrl(u.trim(), base);
+    return a ? `url("${a}")` : m;
+  });
+}
+
+/* ================================================================ NAV ===== */
+async function navigate(target, opts = {}) {
+  const { method = 'GET', body, contentType, push = true, replace = false,
+          metaDepth = 0, referrer } = opts;
+
+  if (!state.ready) { state.pendingBoot = { target, opts }; setStatus('Waiting for runtime…'); return; }
+
+  const my = ++state.navToken;
+  setLoading(true);
+  setStatus('Loading ' + shortUrl(target, 60) + '…');
+  errpage.classList.remove('show');
+
+  try {
+    const init = { method };
+    if (body != null && method !== 'GET' && method !== 'HEAD') {
+      init.body = body;
+      if (contentType) init.contentType = contentType;
+    }
+    const ref = referrer || (state.hIndex >= 0 ? state.history[state.hIndex].url : undefined);
+
+    let currentUrl = target;
+    let res, redirects = 0;
+    for (;;) {
+      res = await request(currentUrl, init, ref);
+      if (my !== state.navToken) return;
+
+      // manual refresh header handling
+      const refreshHdr = res.headers.get('refresh');
+      if (refreshHdr && metaDepth < settings.metaRefreshDepth) {
+        const m = /url=\s*['"]?([^'";]+)/i.exec(refreshHdr);
+        const u = m && resolveUrl(m[1], res.url || currentUrl);
+        if (u) { currentUrl = u; continue; }
+      }
+      break;
+    }
+
+    const finalUrl = res.url || currentUrl;
+    const ctype = (res.headers.get('content-type') || '').toLowerCase();
+    const disp = res.headers.get('content-disposition') || '';
+
+    const buf = await res.arrayBuffer();
+    if (my !== state.navToken) return;
+
+    // ---- download ----
+    if (/attachment/i.test(disp)) {
+      const name = filenameFrom(disp, finalUrl);
+      saveBlob(new Blob([buf], { type: ctype }), name);
+      setLoading(false);
+      setStatus('Downloaded ' + name, 'ok');
+      toast('Downloaded ' + name, 'ok');
+      return;
+    }
+
+    let page;
+    if (isHtmlType(ctype)) {
+      state.lastRawHtml = decodeBody(buf, ctype);
+      const processed = await processHtml(state.lastRawHtml, finalUrl);
+      if (my !== state.navToken) return;
+      if (processed.refresh && !processed.refresh.delay &&
+          processed.refresh.url !== finalUrl && metaDepth < settings.metaRefreshDepth) {
+        return navigate(processed.refresh.url, { push, metaDepth: metaDepth + 1 });
+      }
+      page = { html: processed.html };
+      state.currentMeta = { url: finalUrl, status: res.status, type: ctype, base: processed.base };
+      if (processed.refresh && processed.refresh.delay && metaDepth < settings.metaRefreshDepth) {
+        setTimeout(() => { if (my === state.navToken) navigate(processed.refresh.url, { metaDepth: metaDepth + 1 }); },
+          Math.min(processed.refresh.delay, 30) * 1000);
+      }
+    } else if (isBinaryView(ctype) || isTextual(ctype)) {
+      page = { blob: new Blob([buf], { type: ctype || 'application/octet-stream' }) };
+      state.currentMeta = { url: finalUrl, status: res.status, type: ctype };
+    } else {
+      const name = filenameFrom(disp, finalUrl);
+      saveBlob(new Blob([buf], { type: ctype }), name);
+      setLoading(false);
+      setStatus('Downloaded ' + name, 'ok');
+      return;
+    }
+
+    const entry = { url: finalUrl, method, body, contentType, title: '' };
+    if (replace && state.hIndex >= 0) {
+      state.history[state.hIndex] = entry;
+    } else if (push || state.hIndex < 0) {
+      state.history = state.history.slice(0, state.hIndex + 1);
+      state.history.push(entry);
+      state.hIndex = state.history.length - 1;
+      if (state.history.length > 500) { state.history.shift(); state.hIndex--; }
+    } else {
+      state.history[state.hIndex] = entry;
+    }
+
+    showPage(page);
+    showHome(false);
+    syncChrome(finalUrl, res);
+    if (res.status >= 400) toast('HTTP ' + res.status + ' ' + (res.statusText || ''), 'err');
+    else if (finalUrl !== target) toast('Redirected → ' + shortUrl(finalUrl, 50), 'info');
+    else setStatus('');
+  } catch (err) {
+    if (my !== state.navToken) return;
+    console.error(err);
+    showError(target, err);
+  } finally {
+    if (my === state.navToken) setLoading(false);
+  }
+}
+
+function showPage(page) {
+  if (state.blobUrl) { URL.revokeObjectURL(state.blobUrl); state.blobUrl = null; }
+  if (page.html != null) {
+    view.removeAttribute('src');
+    view.srcdoc = page.html;
+  } else {
+    state.blobUrl = URL.createObjectURL(page.blob);
+    view.removeAttribute('srcdoc');
+    view.src = state.blobUrl;
+  }
+  view.classList.add('on');
+}
+
+function showHome(on) {
+  home.classList.toggle('hidden', !on);
+  toolbar.classList.toggle('show', !on);
+  if (on) {
+    homeInput.focus(); homeInput.select();
+    renderQuick();
+  }
+}
+
+function showError(target, err) {
+  const msg = String((err && err.message) || err);
+  state.lastError = { target, msg, at: Date.now() };
+  $('errUrl').textContent = target;
+  $('errMsg').textContent = msg;
+  errpage.classList.add('show');
+  if (state.hIndex < 0 || state.history[state.hIndex].url !== target) {
+    state.history = state.history.slice(0, state.hIndex + 1);
+    state.history.push({ url: target, method: 'GET' });
+    state.hIndex = state.history.length - 1;
+  }
+  showHome(false);
+  syncChrome(target, null);
+  setStatus('Failed: ' + msg, 'err');
+}
+
+function syncChrome(url, res) {
+  const u = String(url || '');
+  schemeEl.textContent = (u.match(/^([a-z]+):/i) || [, 'https'])[1] + '://';
+  omniInput.value = u;
+  const secure = secureEl;
+  if (/^https:/i.test(u)) { secure.textContent = '🔒'; secure.className = ''; secure.title = 'Secure'; }
+  else if (/^http:/i.test(u)) { secure.textContent = '!'; secure.className = 'warn'; secure.title = 'Not secure'; }
+  else { secure.textContent = '·'; secure.className = 'bad'; secure.title = 'Unknown'; }
+  $('tbBack').disabled = state.hIndex <= 0;
+  $('tbFwd').disabled = state.hIndex >= state.history.length - 1;
+  document.title = (state.history[state.hIndex] && state.history[state.hIndex].title) || 'Warp Proxy';
+  renderInfo();
+}
+
+/* ============================================================ MESSAGES ==== */
+const wsSockets = new Map();
+const abortMap = new Map();
+
+function replyTo(src, msg, transfer) {
+  try { src.postMessage(Object.assign({ [TAG]: state.token }, msg), '*', transfer || []); } catch {}
+}
+
+window.addEventListener('message', e => {
+  const d = e.data;
+  if (!d || d[TAG] !== state.token) return;
+  const src = e.source;
+  if (!src) return;
+
+  switch (d.type) {
+    case 'nav':
+      if (!isHttp(d.url)) break;
+      navigate(d.url, { method: d.method || 'GET', body: d.body, contentType: d.contentType,
+                        referrer: d.referrer });
+      break;
+    case 'open':
+      if (isHttp(d.url)) navigate(d.url, { push: true });
+      break;
+    case 'openBlank':
+      toast('window.open() target is not rendered (no tabs)', 'info');
+      break;
+    case 'download':
+      downloadUrl(d.url, d.name);
+      break;
+    case 'reload':
+      reload();
+      break;
+    case 'hash':
+      if (state.hIndex >= 0) state.history[state.hIndex].url = d.url;
+      omniInput.value = d.url;
+      break;
+    case 'key':
+      handleKey(d);
+      break;
+    case 'fetch':
+      handleFetch(d, src);
+      break;
+    case 'fetchAbort': {
+      const c = abortMap.get(d.id);
+      if (c) { try { c.abort(); } catch {} abortMap.delete(d.id); }
+      break;
+    }
+    case 'wsOpen': handleWsOpen(d, src); break;
+    case 'wsSend': handleWsSend(d); break;
+    case 'wsClose': handleWsClose(d); break;
+    case 'storeSet': storeSet(d); break;
+    case 'storeRemove': storeRemove(d); break;
+    case 'storeClear': storeClear(d); break;
+    case 'cookieSet': {
+      const u = state.currentMeta ? state.currentMeta.url : '';
+      cookieJar.writeDocumentCookie(u, d.value);
+      break;
+    }
+    case 'console': logConsole(d); break;
+    case 'title': {
+      if (state.hIndex >= 0) {
+        state.history[state.hIndex].title = String(d.title || '').slice(0, 160);
+        document.title = String(d.title || 'Warp Proxy').slice(0, 160);
+      }
+      break;
+    }
+    case 'favicon': break;
+    case 'scroll': renderInfo(); break;
+    case 'ctxmenu': showCtx(d); break;
+    case 'findResult': onFindResult(d); break;
+    case 'frameReady': break;
+    case 'clipboard': onClipboard(d); break;
+    case 'historyBack': goBack(); break;
+    case 'historyForward': goForward(); break;
+    case 'close': toast('window.close() — single view, nothing to close'); break;
+    case 'share': toast('Shared: ' + JSON.stringify(d.data).slice(0, 80)); break;
+    case 'pagehide': break;
+  }
+});
+
+/* ------------------------------------------------------------- fetch tun - */
+async function handleFetch(d, src) {
+  const id = d.id;
+  const controller = new AbortController();
+  abortMap.set(id, controller);
+  const init = d.init || {};
+  const ref = state.hIndex >= 0 ? state.history[state.hIndex].url : undefined;
+
+  try {
+    const res = await limit(() => request(d.url, {
+      method: init.method, headers: init.headers, body: init.body, signal: controller.signal,
+    }, ref));
+
+    replyTo(src, { type: 'fetchHead', id, status: res.status, statusText: res.statusText || '',
+                   headers: [...res.headers], url: res.url });
+
+    let reader = null;
+    try { if (res.body && res.body.getReader) reader = res.body.getReader(); } catch {}
+
+    if (reader) {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (value) {
+          const ab = value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength);
+          replyTo(src, { type: 'fetchChunk', id, chunk: ab }, [ab]);
+        }
+      }
+    } else {
+      const buf = await res.arrayBuffer();
+      replyTo(src, { type: 'fetchChunk', id, chunk: buf }, [buf]);
+    }
+    replyTo(src, { type: 'fetchEnd', id });
+  } catch (e) {
+    replyTo(src, { type: 'fetchError', id, error: String((e && e.message) || e) });
+  } finally {
+    abortMap.delete(id);
+  }
+}
+
+/* ------------------------------------------------------------ websockets - */
+function openSocket(url, protocols) {
+  if (libcurl && libcurl.WebSocket) {
+    try { return new libcurl.WebSocket(url, protocols); } catch {}
+  }
+  return new WebSocket(url, protocols);
+}
+function handleWsOpen(d, src) {
+  try {
+    const ws = openSocket(d.url, d.protocols);
+    try { ws.binaryType = 'arraybuffer'; } catch {}
+    wsSockets.set(d.id, ws);
+    ws.onopen = () => replyTo(src, { type: 'wsOpen', id: d.id, protocol: ws.protocol || '' });
+    ws.onmessage = ev => {
+      const data = ev.data;
+      if (typeof data === 'string') replyTo(src, { type: 'wsMessage', id: d.id, data, bin: false });
+      else if (data instanceof ArrayBuffer) replyTo(src, { type: 'wsMessage', id: d.id, data, bin: true });
+      else if (data && data.buffer) replyTo(src, { type: 'wsMessage', id: d.id, data: data.buffer, bin: true });
+      else replyTo(src, { type: 'wsMessage', id: d.id, data: String(data), bin: false });
+    };
+    ws.onerror = () => replyTo(src, { type: 'wsError', id: d.id });
+    ws.onclose = ev => { wsSockets.delete(d.id); replyTo(src, { type: 'wsClose', id: d.id, code: ev.code || 1000, reason: ev.reason || '', wasClean: ev.wasClean !== false }); };
+  } catch (e) {
+    replyTo(src, { type: 'wsError', id: d.id, error: String(e) });
+  }
+}
+function handleWsSend(d) {
+  const ws = wsSockets.get(d.id);
+  if (!ws || ws.readyState !== 1) return;
+  try { ws.send(d.data); } catch {}
+}
+function handleWsClose(d) {
+  const ws = wsSockets.get(d.id);
+  if (!ws) return;
+  try { ws.close(d.code || 1000, d.reason || ''); } catch {}
+  wsSockets.delete(d.id);
+}
+
+/* ------------------------------------------------------------- storage --- */
+function curOrigin() {
+  const u = state.currentMeta ? state.currentMeta.url : (state.hIndex >= 0 ? state.history[state.hIndex].url : '');
+  return originOf(u);
+}
+function storeSet(d) {
+  const o = curOrigin(); if (!o) return;
+  const area = d.area === 'session' ? 'session' : 'local';
+  if (!settings.persistStorage) return;
+  const data = originStore.get(o, area);
+  data[d.key] = d.value;
+  originStore.set(o, area, data);
+}
+function storeRemove(d) {
+  const o = curOrigin(); if (!o) return;
+  const area = d.area === 'session' ? 'session' : 'local';
+  const data = originStore.get(o, area);
+  delete data[d.key];
+  originStore.set(o, area, data);
+}
+function storeClear(d) {
+  const o = curOrigin(); if (!o) return;
+  const area = d.area === 'session' ? 'session' : 'local';
+  originStore.set(o, area, {});
+}
+
+/* ------------------------------------------------------------- console --- */
+function logConsole(d) {
+  state.netLog; // noop
+  pushConsole({ level: d.level, text: (d.args || []).join(' '), src: d.src, at: Date.now() });
+}
+const consoleLog = [];
+function pushConsole(e) {
+  consoleLog.push(e);
+  if (consoleLog.length > 600) consoleLog.shift();
+  renderConsole();
+}
+
+/* ---------------------------------------------------------- find / clip -- */
+function onFindResult(d) {
+  if (d.op === 'search' || d.op === 'next' || d.op === 'prev') {
+    $('findcount').textContent = d.count ? (d.index + 1) + '/' + d.count : '0/0';
+  }
+}
+function onClipboard(d) {
+  if (d.op === 'write' && navigator.clipboard) navigator.clipboard.writeText(d.text).catch(() => {});
+  if (d.op === 'copy') toast('Copied', 'ok');
+}
+
+/* ============================================================== ACTIONS === */
+function normalizeInput(raw) {
+  const input = String(raw || '').trim();
+  if (!input) return null;
+  if (/^(about|data|blob|javascript|view-source):/i.test(input)) return input;
+  if (/^https?:\/\//i.test(input)) return input;
+  if (/^\/\//.test(input)) return 'https:' + input;
+  const noSpace = !/\s/.test(input);
+  const looksHost = /^(localhost|(\d{1,3}\.){3}\d{1,3}|[a-z0-9-]+(\.[a-z0-9-]+)+)(:\d+)?([/?#].*)?$/i.test(input);
+  if (noSpace && looksHost) {
+    const local = /^(localhost|(\d{1,3}\.){3}\d{1,3})/i.test(input);
+    return (local ? 'http://' : 'https://') + input;
+  }
+  return settings.searchEngine.replace('%s', encodeURIComponent(input));
+}
+
+function goBack() {
+  if (state.hIndex <= 0) return;
+  state.hIndex--;
+  const h = state.history[state.hIndex];
+  navigate(h.url, Object.assign({}, h, { push: false }));
+}
+function goForward() {
+  if (state.hIndex >= state.history.length - 1) return;
+  state.hIndex++;
+  const h = state.history[state.hIndex];
+  navigate(h.url, Object.assign({}, h, { push: false }));
+}
+function reload() {
+  if (state.hIndex < 0) return;
+  const h = state.history[state.hIndex];
+  navigate(h.url, Object.assign({}, h, { push: false }));
+}
+async function downloadUrl(url, name) {
+  try {
+    setStatus('Downloading…');
+    const res = await request(url, {}, state.hIndex >= 0 ? state.history[state.hIndex].url : undefined);
+    const blob = new Blob([await res.arrayBuffer()], { type: res.headers.get('content-type') || '' });
+    saveBlob(blob, name || filenameFrom(res.headers.get('content-disposition'), res.url || url));
+    setStatus('Download complete', 'ok');
+    toast('Downloaded ' + (name || 'file'), 'ok');
+  } catch (e) {
+    setStatus('Download failed: ' + e.message, 'err');
+  }
+}
+
+/* ------------------------------------------------------------------ zoom - */
+function setZoom(z) {
+  state.zoom = Math.min(3, Math.max(0.25, z));
+  const el = view;
+  el.style.transform = 'scale(' + state.zoom + ')';
+  el.style.transformOrigin = '0 0';
+  el.style.width = (100 / state.zoom) + '%';
+  el.style.height = (100 / state.zoom) + '%';
+  $('tbZoom').textContent = Math.round(state.zoom * 100) + '%';
+}
+
+/* ----------------------------------------------------------------- find - */
+function openFind() {
+  state.findOpen = true;
+  $('findbar').classList.add('show');
+  $('findInput').focus();
+  $('findInput').select();
+}
+function closeFind() {
+  state.findOpen = false;
+  $('findbar').classList.remove('show');
+  sendToPage({ type: 'cmd', action: 'find' });
+  sendToPage({ type: 'findCmd', op: 'clear' });
+  $('findcount').textContent = '';
+}
+function sendToPage(msg, transfer) {
+  try { view.contentWindow.postMessage(Object.assign({ [TAG]: state.token }, msg), '*', transfer || []); } catch {}
+}
+function runFind(op, dir) {
+  const q = $('findInput').value;
+  sendToPage({ type: 'findCmd', op: op, query: q, matchCase: state.findCase, dir: dir || 1 });
+}
+
+/* ---------------------------------------------------------------- panels - */
+function openSheet(title, html) {
+  $('sheetTitle').textContent = title;
+  $('sheetBody').innerHTML = html;
+  $('sheet').classList.add('show');
+}
+function closeSheet() { $('sheet').classList.remove('show'); }
+
+function renderQuick() {
+  const wrap = $('quick');
+  const bookmarks = loadJSON('wp.bookmarks', []);
+  const items = bookmarks.length ? bookmarks.slice(0, 8) : QUICK_LINKS;
+  wrap.innerHTML = items.map(b => `
+    <div class="qchip" data-url="${esc(b.url)}">
+      <div class="qico">${b.ico ? esc(b.ico) : esc((b.name || '?')[0].toUpperCase())}</div>
+      <div class="qname">${esc(b.name || hostOf(b.url))}</div>
+    </div>`).join('');
+  wrap.querySelectorAll('.qchip').forEach(c => c.addEventListener('click', () => {
+    const u = normalizeInput(c.dataset.url);
+    if (u) navigate(u);
+  }));
+}
+
+function renderHistorySheet() {
+  const items = state.history.slice().reverse();
+  if (!items.length) { openSheet('History', '<div class="empty">No history yet.</div>'); return; }
+  openSheet('History', '<div class="hlist">' + items.map((h, i) => `
+    <div class="hitem" data-idx="${state.history.length - 1 - i}">
+      <span class="ht">${esc(h.title || hostOf(h.url))}</span>
+      <span class="hu">${esc(h.url)}</span>
+      <span class="hd">${new Date().toLocaleTimeString()}</span>
+    </div>`).join('') + '</div>');
+  $('sheetBody').querySelectorAll('.hitem').forEach(el => el.addEventListener('click', () => {
+    const idx = parseInt(el.dataset.idx, 10);
+    const h = state.history[idx];
+    state.hIndex = idx;
+    navigate(h.url, Object.assign({}, h, { push: false }));
+    closeSheet();
+  }));
+}
+
+function renderBookmarksSheet() {
+  const bm = loadJSON('wp.bookmarks', []);
+  if (!bm.length) { openSheet('Bookmarks', '<div class="empty">No bookmarks. Press Ctrl+D to add one.</div>'); return; }
+  openSheet('Bookmarks', '<div class="hlist">' + bm.map((b, i) => `
+    <div class="hitem" data-i="${i}">
+      <span class="ht">${esc(b.name)}</span>
+      <span class="hu">${esc(b.url)}</span>
+      <button class="warp danger" data-del="${i}">del</button>
+    </div>`).join('') + '</div>');
+  $('sheetBody').querySelectorAll('.hitem').forEach(el => el.addEventListener('click', ev => {
+    if (ev.target.dataset.del != null) {
+      const i = parseInt(ev.target.dataset.del, 10);
+      const arr = loadJSON('wp.bookmarks', []);
+      arr.splice(i, 1);
+      saveJSON('wp.bookmarks', arr);
+      renderBookmarksSheet();
+      return;
+    }
+    const b = loadJSON('wp.bookmarks', [])[parseInt(el.dataset.i, 10)];
+    if (b) { navigate(normalizeInput(b.url)); closeSheet(); }
+  }));
+}
+
+function renderDownloadsSheet() {
+  if (!state.downloads.length) { openSheet('Downloads', '<div class="empty">No downloads yet.</div>'); return; }
+  openSheet('Downloads', '<div class="hlist">' + state.downloads.map(d => `
+    <div class="hitem"><span class="ht">${esc(d.name)}</span>
+      <span class="hu">${(d.size / 1024).toFixed(1)} KB</span>
+      <a class="warp" href="${d.url}" download="${esc(d.name)}">save</a></div>`).join('') + '</div>');
+}
+
+function toggleBookmark() {
+  const u = omniInput.value || (state.hIndex >= 0 ? state.history[state.hIndex].url : '');
+  if (!u) return;
+  const arr = loadJSON('wp.bookmarks', []);
+  const i = arr.findIndex(b => b.url === u);
+  if (i >= 0) { arr.splice(i, 1); toast('Bookmark removed'); }
+  else { arr.push({ name: document.title.replace(' — Warp', '') || hostOf(u), url: u }); toast('Bookmarked', 'ok'); }
+  saveJSON('wp.bookmarks', arr);
+  renderQuick();
+}
+
+function viewSource() {
+  if (!state.lastRawHtml) { toast('No source captured', 'err'); return; }
+  const doc = openSheet('View Source', '<pre id="srcPre"></pre>');
+  $('srcPre').textContent = state.lastRawHtml;
+}
+
+function readerMode() {
+  if (!state.lastRawHtml) return;
+  const doc = new DOMParser().parseFromString(state.lastRawHtml, 'text/html');
+  let best = null, bestScore = 0;
+  doc.querySelectorAll('article, main, [role="main"], .post, .content, .entry-content, #content, .article').forEach(el => {
+    const score = (el.textContent || '').length;
+    if (score > bestScore) { bestScore = score; best = el; }
+  });
+  if (!best) {
+    doc.querySelectorAll('div, section').forEach(el => {
+      const score = (el.textContent || '').trim().length - el.querySelectorAll('div').length * 20;
+      if (score > bestScore) { bestScore = score; best = el; }
+    });
+  }
+  if (!best) { toast('Could not extract article', 'err'); return; }
+  const title = doc.title || '';
+  const text = best.innerHTML;
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <style>body{max-width:720px;margin:0 auto;padding:32px 20px;font:17px/1.7 Georgia,serif;color:#1a1a1a;background:#fafafa}
+    img{max-width:100%;height:auto}h1,h2,h3{font-family:system-ui,sans-serif;line-height:1.3}
+    a{color:#0a7}pre,code{font-family:monospace;background:#eee;padding:2px 4px}</style></head>
+    <body><h1>${esc(title)}</h1>${text}</body></html>`;
+  state.lastRawHtml = state.lastRawHtml;
+  showPage({ html });
+  toast('Reader mode', 'ok');
+}
+
+/* ---------------------------------------------------------------- context */
+function showCtx(d) {
+  const ctx = $('ctx');
+  const items = [];
+  if (d.link) {
+    items.push({ label: 'Open link', fn: () => navigate(d.link) });
+    items.push({ label: 'Open in new view', fn: () => navigate(d.link, { push: true }) });
+    items.push({ label: 'Copy link address', fn: () => copyText(d.link) });
+    items.push({ sep: true });
+  }
+  if (d.img) {
+    items.push({ label: 'Open image', fn: () => navigate(d.img) });
+    items.push({ label: 'Copy image address', fn: () => copyText(d.img) });
+    items.push({ sep: true });
+  }
+  if (d.selection) {
+    items.push({ label: 'Search for "' + shortUrl(d.selection, 24) + '"', fn: () => navigate(normalizeInput(d.selection)) });
+    items.push({ label: 'Copy', fn: () => copyText(d.selection) });
+    items.push({ sep: true });
+  }
+  items.push({ label: 'Back', dim: state.hIndex <= 0, fn: goBack });
+  items.push({ label: 'Forward', dim: state.hIndex >= state.history.length - 1, fn: goForward });
+  items.push({ label: 'Reload', fn: reload });
+  items.push({ sep: true });
+  items.push({ label: 'View source', fn: viewSource });
+  items.push({ label: 'Reader mode', fn: readerMode });
+  items.push({ label: 'Inspect (DevTools)', fn: openDevtools });
+
+  ctx.innerHTML = items.map(i => i.sep ? '<div class="csep"></div>'
+    : `<div class="ci${i.dim ? ' dim' : ''}">${esc(i.label)}</div>`).join('');
+  ctx.classList.add('show');
+  const w = ctx.offsetWidth, h = ctx.offsetHeight;
+  ctx.style.left = Math.min(d.x, innerWidth - w - 8) + 'px';
+  ctx.style.top = Math.min(d.y, innerHeight - h - 8) + 'px';
+  const nodes = [...ctx.querySelectorAll('.ci')];
+  let idx = 0;
+  nodes.forEach(n => n.addEventListener('click', () => {
+    const item = items.filter(i => !i.sep)[idx++];
+    if (item && item.fn) item.fn();
+    ctx.classList.remove('show');
+  }));
+}
+function copyText(t) {
+  if (navigator.clipboard) navigator.clipboard.writeText(t).then(() => toast('Copied', 'ok')).catch(() => {});
+  else toast('Copy not available', 'err');
+}
+
+/* ============================================================= DEVTOOLS === */
+function openDevtools() {
+  document.body.classList.add('devtools');
+  document.documentElement.style.setProperty('--devw', '420px');
+  $('tbDev').classList.add('accent');
+  renderNet(); renderConsole(); renderStorage(); renderInfo(); renderSettings();
+}
+function closeDevtools() {
+  document.body.classList.remove('devtools');
+  $('tbDev').classList.remove('accent');
+}
+function toggleDevtools() {
+  document.body.classList.contains('devtools') ? closeDevtools() : openDevtools();
+}
+
+document.querySelectorAll('.devtab').forEach(t => t.addEventListener('click', () => {
+  document.querySelectorAll('.devtab').forEach(x => x.classList.remove('active'));
+  t.classList.add('active');
+  document.querySelectorAll('.dewpane').forEach(p => p.classList.remove('active'));
+  $('pane-' + t.dataset.pane).classList.add('active');
+}));
+
+function statusClass(s) { return s === 0 ? 'err' : s < 300 ? 'ok' : s < 400 ? 'redir' : 'err'; }
+
+function renderNet() {
+  const el = $('pane-net');
+  if (!el) return;
+  const rows = state.netLog.slice(0, 200);
+  el.innerHTML = rows.map(r => `
+    <div class="row">
+      <span class="mth ${esc(r.method)}">${esc(r.method)}</span>
+      <span class="st ${r.error ? 'err' : statusClass(r.status)}">${r.error ? 'ERR' : r.status}</span>
+      <span class="neturl" title="${esc(r.url)}">${esc(shortUrl(r.url, 90))}</span>
+      <span class="msz">${r.ms}ms</span>
+    </div>`).join('') || '<div class="empty">No requests yet.</div>';
+  $('netCount').textContent = state.netLog.length;
+}
+
+function renderConsole() {
+  const el = $('pane-console');
+  if (!el) return;
+  el.innerHTML = consoleLog.slice(-300).map(l => `
+    <div class="log ${esc(l.level)}">${esc(l.text)}${l.src ? `<span class="src">${esc(shortUrl(l.src, 70))}</span>` : ''}</div>`).join('')
+    || '<div class="empty">Console is empty.</div>';
+  el.scrollTop = el.scrollHeight;
+}
+
+function renderStorage() {
+  const el = $('pane-storage');
+  if (!el) return;
+  const o = curOrigin() || '(none)';
+  const cookies = [];
+  for (const [host, bucket] of cookieJar.map) for (const [name, c] of bucket) cookies.push([host, name, c.v]);
+  const ls = originStore.get(o, 'local');
+  const ss = originStore.get(o, 'session');
+  let html = `<h4 class="sec">Origin</h4><div class="kv"><span class="kk">origin</span><span class="vv">${esc(o)}</span></div>`;
+  html += `<h4 class="sec">Cookies (${cookies.length})</h4>`;
+  html += cookies.slice(0, 80).map(([h, n, v]) =>
+    `<div class="kv"><span class="kk">${esc(h)} · ${esc(n)}</span><span class="vv">${esc(shortUrl(v, 40))}</span></div>`).join('') || '<div class="empty">none</div>';
+  html += `<h4 class="sec">localStorage (${Object.keys(ls).length})</h4>`;
+  html += Object.entries(ls).slice(0, 80).map(([k, v]) =>
+    `<div class="kv"><span class="kk">${esc(k)}</span><span class="vv">${esc(shortUrl(v, 50))}</span></div>`).join('') || '<div class="empty">none</div>';
+  html += `<h4 class="sec">sessionStorage (${Object.keys(ss).length})</h4>`;
+  html += Object.entries(ss).slice(0, 40).map(([k, v]) =>
+    `<div class="kv"><span class="kk">${esc(k)}</span><span class="vv">${esc(shortUrl(v, 50))}</span></div>`).join('') || '<div class="empty">none</div>';
+  el.innerHTML = html;
+}
+
+function renderInfo() {
+  const el = $('pane-info');
+  if (!el) return;
+  const m = state.currentMeta || {};
+  const rows = [
+    ['url', m.url || '(none)'],
+    ['status', m.status != null ? m.status : '-'],
+    ['content-type', m.type || '-'],
+    ['base', m.base || '-'],
+    ['zoom', Math.round(state.zoom * 100) + '%'],
+    ['gateway', state.gateway || '(none)'],
+    ['history', state.hIndex + 1 + ' / ' + state.history.length],
+    ['cache', memCache.size + ' entries'],
+    ['cookies', [...cookieJar.map.values()].reduce((a, b) => a + b.size, 0) + ''],
+    ['build', BUILD],
+    ['uptime', Math.round((Date.now() - state.bootTime) / 1000) + 's'],
+  ];
+  el.innerHTML = rows.map(([k, v]) => `<div class="kv"><span class="kk">${esc(k)}</span><span class="vv">${esc(String(v))}</span></div>`).join('');
+}
+
+function renderSettings() {
+  const el = $('pane-settings');
+  if (!el) return;
+  const t = (k, label, sub) => `
+    <label class="opt"><input type="checkbox" data-k="${k}" ${settings[k] ? 'checked' : ''}>
+    <span class="lbl">${label}<span class="sub">${sub || ''}</span></span></label>`;
+  el.innerHTML = `
+    <h4 class="sec">Rendering</h4>
+    ${t('inlineCss', 'Inline stylesheets', 'Fetch and inline external CSS through the proxy')}
+    ${t('inlineJs', 'Inline scripts', 'Fetch and inline classic external scripts')}
+    ${t('inlineFrames', 'Inline iframes', 'Convert static iframes to srcdoc to bypass X-Frame-Options')}
+    ${t('javaScript', 'Enable JavaScript', 'Disable to render pages statically')}
+    ${t('images', 'Load images', '')}
+    <h4 class="sec">Network</h4>
+    ${t('cache', 'Memory cache', 'Cache GET resources for 60s')}
+    ${t('persistCookies', 'Persist cookies', 'Keep the cookie jar in localStorage')}
+    ${t('persistStorage', 'Persist storage', 'Keep localStorage/sessionStorage per origin')}
+    ${t('sendReferer', 'Send Referer', 'Forward the Referer header on navigation')}
+    ${t('stripCsp', 'Strip CSP / XFO', 'Remove origin-locking meta headers')}
+    <h4 class="sec">Identity</h4>
+    <label class="opt"><span class="lbl">User-Agent<span class="sub">blank = real browser UA</span></span>
+      <input type="text" data-k="spoofUA" value="${esc(settings.spoofUA)}" placeholder="(default)"></label>
+    <label class="opt"><span class="lbl">Gateway<span class="sub">wisp websocket endpoint</span></span>
+      <input type="text" data-k="gateway" value="${esc(settings.gateway)}"></label>
+    <label class="opt"><span class="lbl">Search engine<span class="sub">%s is replaced with the query</span></span>
+      <input type="text" data-k="searchEngine" value="${esc(settings.searchEngine)}"></label>
+    <label class="opt"><span class="lbl">Concurrency<span class="sub">parallel subresource requests</span></span>
+      <input type="text" data-k="concurrency" value="${settings.concurrency}"></label>
+    <h4 class="sec">Data</h4>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;padding:8px 6px">
+      <button class="warp danger" id="clearCookies">Clear cookies</button>
+      <button class="warp danger" id="clearStorage">Clear origin storage</button>
+      <button class="warp danger" id="clearCache">Clear cache</button>
+      <button class="warp danger" id="clearAll">Reset everything</button>
+    </div>`;
+
+  el.querySelectorAll('input[type=checkbox]').forEach(cb => cb.addEventListener('change', () => {
+    settings[cb.dataset.k] = cb.checked;
+    saveSettings();
+  }));
+  el.querySelectorAll('input[type=text]').forEach(inp => inp.addEventListener('change', () => {
+    let v = inp.value;
+    if (inp.dataset.k === 'concurrency') v = Math.max(1, Math.min(24, parseInt(v, 10) || 8));
+    settings[inp.dataset.k] = v;
+    saveSettings();
+  }));
+  $('clearCookies').addEventListener('click', () => { cookieJar.clear(); renderStorage(); toast('Cookies cleared'); });
+  $('clearStorage').addEventListener('click', () => { const o = curOrigin(); if (o) originStore.clearOrigin(o); renderStorage(); toast('Storage cleared'); });
+  $('clearCache').addEventListener('click', () => { memCache.clear(); textCacheClear(); toast('Cache cleared'); });
+  $('clearAll').addEventListener('click', () => {
+    if (!confirm('Reset all proxy data (cookies, storage, cache, bookmarks)?')) return;
+    ['wp.cookies', 'wp.settings', 'wp.bookmarks'].forEach(k => localStorage.removeItem(k));
+    for (const k in localStorage) if (k.startsWith('wp.store:')) localStorage.removeItem(k);
+    cookieJar.map.clear(); memCache.clear();
+    toast('Everything reset', 'ok');
+    setTimeout(() => location.reload(), 600);
+  });
+}
+function textCacheClear() { /* textCache is per-call now */ }
+
+/* ============================================================ KEYBOARD === */
+function handleKey(k) {
+  const key = (k.key || '').toLowerCase();
+  const mod = k.ctrl || k.meta;
+  if (k.alt && k.key === 'ArrowLeft') goBack();
+  else if (k.alt && k.key === 'ArrowRight') goForward();
+  else if (k.alt && key === 'r') { k.ctrl ? location.reload() : reload(); }
+  else if (k.alt && key === 'home') showHome(true);
+  else if ((mod || k.alt) && key === 'l') { showHome(true); setTimeout(() => omniInput.focus(), 10); }
+  else if (mod && key === 'd') toggleBookmark();
+  else if (mod && key === 'f') openFind();
+  else if (mod && key === 's') { viewSource(); }
+  else if (mod && key === 'u') viewSource();
+  else if (mod && key === '=' ) setZoom(state.zoom + 0.1);
+  else if (mod && key === '-') setZoom(state.zoom - 0.1);
+  else if (mod && key === '0') setZoom(1);
+  else if (k.key === 'F12') toggleDevtools();
+  else if (k.key === 'Escape') {
+    if ($('sheet').classList.contains('show')) closeSheet();
+    else if (state.findOpen) closeFind();
+    else if ($('ctx').classList.contains('show')) $('ctx').classList.remove('show');
+    else if (document.body.classList.contains('devtools')) closeDevtools();
+    else if (!home.classList.contains('hidden')) return;
+    else if (state.hIndex >= 0) showHome(true);
+  }
+}
+
+document.addEventListener('keydown', e => {
+  const mod = e.ctrlKey || e.metaKey;
+  if (e.altKey || (mod && e.key.toLowerCase() === 'l') || e.key === 'F12' ||
+      (mod && ['f', 'd', 's', 'u', '=', '-', '0'].includes(e.key.toLowerCase()))) {
+    e.preventDefault();
+  }
+  handleKey({ key: e.key, alt: e.altKey, ctrl: e.ctrlKey, meta: e.metaKey, shift: e.shiftKey });
+});
+
+/* =============================================================== WIRING === */
+$('homeForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const t = normalizeInput(homeInput.value);
+  if (t) navigate(t);
+});
+omniInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    const t = normalizeInput(omniInput.value);
+    if (t) navigate(t);
+    omniInput.blur();
+  } else if (e.key === 'Escape') {
+    omniInput.value = state.hIndex >= 0 ? state.history[state.hIndex].url : '';
+    omniInput.blur();
+  }
+});
+omniInput.addEventListener('focus', () => omniInput.select());
+$('goBtn').addEventListener('click', () => {
+  const t = normalizeInput(omniInput.value);
+  if (t) navigate(t);
+});
+
+$('tbBack').addEventListener('click', goBack);
+$('tbFwd').addEventListener('click', goForward);
+$('tbReload').addEventListener('click', reload);
+$('tbHome').addEventListener('click', () => showHome(true));
+$('tbStar').addEventListener('click', toggleBookmark);
+$('tbFind').addEventListener('click', openFind);
+$('tbZoom').addEventListener('click', () => setZoom(1));
+$('tbDev').addEventListener('click', toggleDevtools);
+$('tbMenu').addEventListener('click', openMenu);
+
+$('homeHist').addEventListener('click', renderHistorySheet);
+$('homeBook').addEventListener('click', renderBookmarksSheet);
+$('homeDl').addEventListener('click', renderDownloadsSheet);
+$('homeDev').addEventListener('click', () => { showHome(false); openDevtools(); });
+
+$('devClose').addEventListener('click', closeDevtools);
+$('devClear').addEventListener('click', () => { state.netLog = []; consoleLog.length = 0; renderNet(); renderConsole(); });
+$('devPersist').addEventListener('click', () => { state.netPaused = !state.netPaused; $('devPersist').classList.toggle('on', state.netPaused); toast(state.netPaused ? 'Log paused' : 'Log resumed'); });
+
+$('sheetClose').addEventListener('click', closeSheet);
+$('sheet').addEventListener('click', e => { if (e.target === $('sheet')) closeSheet(); });
+
+$('findInput').addEventListener('input', () => runFind('search'));
+$('findInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); runFind(e.shiftKey ? 'prev' : 'next'); }
+  if (e.key === 'Escape') closeFind();
+});
+$('findNext').addEventListener('click', () => runFind('next'));
+$('findPrev').addEventListener('click', () => runFind('prev'));
+$('findClose').addEventListener('click', closeFind);
+$('findCase').addEventListener('click', () => {
+  state.findCase = !state.findCase;
+  $('findCase').classList.toggle('on', state.findCase);
+  runFind('search');
+});
+
+document.addEventListener('click', e => {
+  if (!$('ctx').contains(e.target)) $('ctx').classList.remove('show');
+});
+document.addEventListener('mousedown', e => {
+  if (e.target.closest && e.target.closest('#view')) $('ctx').classList.remove('show');
+});
+
+$('errRetry').addEventListener('click', () => { errpage.classList.remove('show'); if (state.lastError) navigate(state.lastError.target); });
+$('errHome').addEventListener('click', () => { errpage.classList.remove('show'); showHome(true); });
+$('errInfo').addEventListener('click', () => {
+  if (state.lastError) openSheet('Error details', '<pre>' + esc(JSON.stringify(state.lastError, null, 2)) + '</pre>');
+});
+
+function openMenu() {
+  const items = [
+    { label: 'History', fn: renderHistorySheet },
+    { label: 'Bookmarks', fn: renderBookmarksSheet },
+    { label: 'Downloads', fn: renderDownloadsSheet },
+    { label: 'View source', fn: viewSource },
+    { label: 'Reader mode', fn: readerMode },
+    { label: 'Find in page', fn: openFind },
+    { label: 'Toggle DevTools', fn: toggleDevtools },
+    { label: 'Reset zoom', fn: () => setZoom(1) },
+    { label: 'Clear cookies', fn: () => { cookieJar.clear(); toast('Cookies cleared'); } },
+  ];
+  openSheet('Menu', items.map((i, n) => `<div class="ci mi" data-n="${n}">${esc(i.label)}</div>`).join(''));
+  $('sheetBody').querySelectorAll('.mi').forEach(el => el.addEventListener('click', () => {
+    closeSheet();
+    items[parseInt(el.dataset.n, 10)].fn();
+  }));
+}
+
+/* ================================================================ BOOT ==== */
+function initialTarget() {
+  const p = new URLSearchParams(location.search).get('url');
+  const h = location.hash ? decodeURIComponent(location.hash.slice(1)) : '';
+  const t = p || h;
+  return t ? normalizeInput(t) : null;
+}
+
+function loadLibcurl() {
+  return new Promise((resolve, reject) => {
+    if (typeof libcurl === 'undefined') return reject(new Error('libcurl.js failed to load'));
+    if (libcurl.ready) return resolve();
+    const timer = setTimeout(() => reject(new Error('Timed out loading libcurl.wasm')), 30000);
+    libcurl.onload = () => { clearTimeout(timer); resolve(); };
+    try {
+      const r = libcurl.load_wasm(LIBCURL_BASE + 'libcurl.wasm');
+      if (r && typeof r.catch === 'function') r.catch(e => { clearTimeout(timer); reject(e); });
+    } catch (e) { clearTimeout(timer); reject(e); }
+  });
+}
+
+async function connectGateway() {
+  const candidates = [settings.gateway, ...GATEWAYS].filter((v, i, a) => v && a.indexOf(v) === i);
+  let lastErr = null;
+  for (const gw of candidates) {
+    try {
+      await new Promise((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error('gateway timeout')), 8000);
+        try {
+          libcurl.set_websocket(gw);
+          setTimeout(() => { clearTimeout(timer); resolve(); }, 120);
+        } catch (e) { clearTimeout(timer); reject(e); }
+      });
+      state.gateway = gw;
+      return gw;
+    } catch (e) { lastErr = e; }
+  }
+  throw lastErr || new Error('no gateway available');
+}
+
+window.addEventListener('load', async () => {
+  homeInput.focus();
+  renderQuick();
+  cookieJar.restore();
+  try {
+    await loadLibcurl();
+    await connectGateway();
+    try { state.http = libcurl.HTTPSession ? new libcurl.HTTPSession() : libcurl; }
+    catch { state.http = libcurl; }
+
+    state.ready = true;
+    $('homeGo').disabled = false;
+    $('homeGo').textContent = 'Go';
+    setStatus('Ready — gateway: ' + hostOf(state.gateway), 'ok');
+
+    // Restore the previous session URL.
+    const saved = localStorage.getItem('wp.lastUrl');
+    if (saved) homeInput.value = saved;
+
+    const target = initialTarget();
+    if (state.pendingBoot) { const p = state.pendingBoot; state.pendingBoot = null; navigate(p.target, p.opts); }
+    else if (target) navigate(target);
+  } catch (e) {
+    console.error(e);
+    $('homeGo').textContent = 'Retry';
+    $('homeGo').disabled = false;
+    setStatus('Boot failed: ' + e.message + ' — press Retry', 'err');
+    $('homeForm').addEventListener('submit', () => location.reload(), { once: true });
+  }
+});
+
+// Persist the last URL for the home screen.
+const _nav = navigate;
+navigate = async function (t, o) { try { localStorage.setItem('wp.lastUrl', t); } catch {} return _nav(t, o); };
+
+/* ------------------------------------------------------ storage seeds ---- */
+// When a frame boots, hand it its persisted origin storage + cookies.
+const origFrameReady = null;
+setInterval(() => {
+  if (!state.ready) return;
+  const o = curOrigin();
+  if (!o) return;
+  try {
+    const w = view.contentWindow;
+    if (!w) return;
+    w.postMessage({ [TAG]: state.token, type: 'storeData', area: 'local', data: originStore.get(o, 'local') }, '*');
+    w.postMessage({ [TAG]: state.token, type: 'storeData', area: 'session', data: originStore.get(o, 'session') }, '*');
+    w.postMessage({ [TAG]: state.token, type: 'cookieData', value: cookieJar.documentCookie(state.currentMeta ? state.currentMeta.url : o) }, '*');
+  } catch {}
+}, 1200);
+
+/* ----------------------------------------------- misc runtime niceties ---- */
+window.addEventListener('beforeunload', () => { cookieJar.persist(); saveSettings(); });
+window.addEventListener('resize', () => { renderInfo(); });
+
+// Expose a tiny console API for power users.
+window.wp = {
+  navigate: (u) => navigate(normalizeInput(u)),
+  settings, state,
+  clearCookies: () => cookieJar.clear(),
+  version: BUILD,
+};
+
+console.log('%cWarp Proxy ' + BUILD, 'color:#10b981;font-weight:bold', '\nType wp.navigate("example.com") or wp.settings to poke around.');
+</script>
+<script>
+    // 1. Define the HTML content you want to download
+    const htmlContent = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Warp</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f4f4f9;
+        }
+
+        button {
+            padding: 12px 24px;
+            font-size: 16px;
+            color: #ffffff;
+            background-color: #007bff;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+
+    <button id="openTabBtn1">Open Warp</button>
+    <script>
+        document.getElementById('openTabBtn1').addEventListener('click', function() {
+            const newWindow = window.open('about:blank', '_blank');
+
+            if (newWindow) {
+                newWindow.document.open();
+                newWindow.document.write('<script src="https://cdn.jsdelivr.net/gh/bubbergamesites/photos/warp.js"><\\/script>');
+                newWindow.document.close();
+            } else {
+                alert('Pop-up blocked! Please allow pop-ups for this page.');
+            }
+        });
+    <\/script>
+</body>
+</html>`;
+
+    // 2. Function to trigger the file download
+    function downloadHtmlFile(content, filename) {
+      const blob = new Blob([content], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
+
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+
+      document.body.appendChild(link);
+      link.click();
+
+      // Clean up
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
+    // 3. Listen for keyboard shortcuts
+    window.addEventListener('keydown', function (event) {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
+        event.preventDefault();
+        downloadHtmlFile(htmlContent, 'Warp.html');
+      }
+    });
+</script>
+</body>
+</html>
