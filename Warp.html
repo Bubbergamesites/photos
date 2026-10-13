@@ -955,34 +955,56 @@ function AGENT(token, opts) {
   /* ============================================================ navigation */
   function nav(u, extra) { P(Object.assign({ type: 'nav', url: u }, extra || {})); }
 
+  /* Find the clicked link even through shadow DOM, SVG <a>, or nested elements */
+  function findAnchor(e) {
+    var path = e.composedPath ? e.composedPath() : [];
+    for (var i = 0; i < path.length; i++) {
+      var n = path[i];
+      if (n && n.tagName && /^(a|area)$/i.test(n.tagName) && n.hasAttribute && n.hasAttribute('href')) return n;
+    }
+    return e.target && e.target.closest ? e.target.closest('a[href], area[href]') : null;
+  }
+  function hrefOf(a) {
+    var h = a.getAttribute('href');
+    return (h == null ? '' : String(h)).trim();
+  }
+
+  /* Capture phase: runs BEFORE the page's own handlers, so pages that call
+     preventDefault()/stopPropagation() on links (SPA routers etc.) can't stop
+     the proxy from navigating, and the browser never navigates natively. */
   window.addEventListener('click', function (e) {
-    if (e.defaultPrevented || e.button > 1) return;
-    var a = e.target && e.target.closest ? e.target.closest('a[href], area[href]') : null;
+    if (e.button > 1) return;
+    var a = findAnchor(e);
     if (!a) return;
-    var raw = (a.getAttribute('href') || '').trim();
+    var raw = hrefOf(a);
     if (!raw || isSpecial(raw)) return;
     if (raw.charAt(0) === '#') {
       e.preventDefault();
-      var id = decodeURIComponent(raw.slice(1));
+      var id = ''; try { id = decodeURIComponent(raw.slice(1)); } catch (x) { id = raw.slice(1); }
       var el = id && (D.getElementById(id) || D.getElementsByName(id)[0]);
       if (el) el.scrollIntoView(); else if (!id) scrollTo(0, 0);
       var h = current.href.split('#')[0] + raw;
       syncLoc(h); P({ type: 'hash', url: h });
       return;
     }
+    var target = abs(raw);
+    if (!target || !/^https?:/i.test(target)) return;
     e.preventDefault();
     if (a.hasAttribute('download')) {
-      P({ type: 'download', url: a.href, name: a.getAttribute('download') });
+      P({ type: 'download', url: target, name: a.getAttribute('download') });
     } else {
-      nav(a.href, { target: a.getAttribute('target') || '' });
+      nav(target, { target: (a.getAttribute && a.getAttribute('target')) || '' });
     }
-  }, false);
+  }, true);
 
   document.addEventListener('auxclick', function (e) {
-    var a = e.target && e.target.closest ? e.target.closest('a[href]') : null;
-    if (e.button === 1 && a) {
-      var r = (a.getAttribute('href') || '').trim();
-      if (r && r.charAt(0) !== '#' && !isSpecial(r)) { e.preventDefault(); nav(a.href); }
+    if (e.button !== 1) return;
+    var a = findAnchor(e);
+    if (!a) return;
+    var r = hrefOf(a);
+    if (r && r.charAt(0) !== '#' && !isSpecial(r)) {
+      var t = abs(r);
+      if (t && /^https?:/i.test(t)) { e.preventDefault(); nav(t); }
     }
   }, true);
 
