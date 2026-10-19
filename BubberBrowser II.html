@@ -770,7 +770,7 @@
             let s = '';
             try { s = localStorage.getItem('mini:gateway') || ''; } catch {}
             const l = s.split(',').map(x => x.trim()).filter(Boolean);
-            if (!l.includes('wss://wisp.mercurywork.shop/') && !l.includes('wss://wisp.mercurywork.shop')) l.push('wss://wisp.mercurywork.shop/');
+            if (!l.includes('wss://bubberwisp.wasmer.app/wisp//') && !l.includes('wss://bubberwisp.wasmer.app/wisp/')) l.push('wss://bubberwisp.wasmer.app/wisp//');
             return l;
         })();
         let gwIdx = 0, lastReconn = 0;
